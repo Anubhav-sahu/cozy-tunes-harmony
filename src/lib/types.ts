@@ -35,3 +35,7 @@ export interface SyncState {
   isSyncing: boolean;
   lastSyncTime?: number; // When was the last sync
 }
+
+export interface ViewState {
+  isFullscreenBackground: boolean;
+}

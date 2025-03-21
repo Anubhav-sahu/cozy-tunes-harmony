@@ -7,8 +7,6 @@ import { toast } from 'sonner';
 // In a real app, you'd use WebSockets or Firebase Realtime Database
 export const useChat = (syncRoomId: string | null) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   // Load initial messages
   useEffect(() => {
@@ -51,16 +49,10 @@ export const useChat = (syncRoomId: string | null) => {
           const newMessages = JSON.parse(e.newValue);
           setMessages(newMessages);
           
-          // Update unread count if chat is closed
-          if (!isChatOpen && newMessages.length > messages.length) {
-            const newCount = newMessages.length - messages.length;
-            setUnreadCount(prev => prev + newCount);
-            
-            // Show toast for the latest message
-            const latestMessage = newMessages[newMessages.length - 1];
-            if (latestMessage.sender === 'partner') {
-              toast.info(`New message: ${latestMessage.text}`);
-            }
+          // Show toast for the latest message
+          const latestMessage = newMessages[newMessages.length - 1];
+          if (latestMessage && latestMessage.sender === 'partner') {
+            toast.info(`New message: ${latestMessage.text}`);
           }
         } catch (error) {
           console.error('Failed to parse chat data:', error);
@@ -73,14 +65,7 @@ export const useChat = (syncRoomId: string | null) => {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [syncRoomId, messages, isChatOpen]);
-
-  // Reset unread count when chat is opened
-  useEffect(() => {
-    if (isChatOpen) {
-      setUnreadCount(0);
-    }
-  }, [isChatOpen]);
+  }, [syncRoomId, messages]);
 
   const sendMessage = (text: string) => {
     if (!text.trim() || !syncRoomId) return;
@@ -116,17 +101,9 @@ export const useChat = (syncRoomId: string | null) => {
         };
         
         setMessages(prev => [...prev, responseMessage]);
-        
-        if (!isChatOpen) {
-          setUnreadCount(prev => prev + 1);
-          toast.info(`New message: ${responseMessage.text}`);
-        }
+        toast.info(`New message: ${responseMessage.text}`);
       }
     }, 2000 + Math.random() * 5000);
-  };
-
-  const toggleChat = () => {
-    setIsChatOpen(prev => !prev);
   };
 
   const clearChat = () => {
@@ -139,10 +116,7 @@ export const useChat = (syncRoomId: string | null) => {
 
   return {
     messages,
-    isChatOpen,
-    unreadCount,
     sendMessage,
-    toggleChat,
     clearChat,
   };
 };

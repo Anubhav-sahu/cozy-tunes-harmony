@@ -4,19 +4,23 @@ import MusicPlayer from '@/components/MusicPlayer';
 import SongList from '@/components/SongList';
 import UploadSong from '@/components/UploadSong';
 import PlayTogether from '@/components/PlayTogether';
-import ChatBubble from '@/components/ChatBubble';
+import ChatSection from '@/components/ChatSection';
 import BackgroundUpload from '@/components/BackgroundUpload';
 import FloatingPlayTogether from '@/components/FloatingPlayTogether';
+import MinimizedPlayer from '@/components/MinimizedPlayer';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useSongSync } from '@/hooks/useSongSync';
 import { useChat } from '@/hooks/useChat';
-import { Song } from '@/lib/types';
+import { Song, ViewState } from '@/lib/types';
 import { toast } from 'sonner';
 
 const Index = () => {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [blurAmount, setBlurAmount] = useState(5);
   const [darknessAmount, setDarknessAmount] = useState(50);
+  const [viewState, setViewState] = useState<ViewState>({
+    isFullscreenBackground: false
+  });
   
   const {
     songs,
@@ -54,10 +58,7 @@ const Index = () => {
   
   const {
     messages,
-    isChatOpen,
-    unreadCount,
     sendMessage,
-    toggleChat,
     clearChat
   } = useChat(syncState.roomId);
   
@@ -139,6 +140,48 @@ const Index = () => {
     localStorage.setItem('background_darkness', value.toString());
   };
   
+  const toggleFullscreenBackground = () => {
+    setViewState(prev => ({
+      ...prev,
+      isFullscreenBackground: !prev.isFullscreenBackground
+    }));
+  };
+  
+  // If in fullscreen background mode, only show minimal UI
+  if (viewState.isFullscreenBackground) {
+    return (
+      <div className="min-h-screen w-full overflow-hidden relative">
+        {/* Background image */}
+        <div className="bg-image-container">
+          {backgroundImage ? (
+            <img 
+              src={backgroundImage} 
+              alt="Background" 
+              className="bg-image"
+              style={{ filter: `blur(${blurAmount}px)` }}
+            />
+          ) : (
+            <div className="bg-gradient-to-br from-[#1a1a2e] to-[#16213e] w-full h-full"></div>
+          )}
+          <div 
+            className="bg-overlay"
+            style={{ 
+              background: `rgba(0,0,0,${darknessAmount / 100})` 
+            }}
+          ></div>
+        </div>
+        
+        {/* Minimized Player Control */}
+        <MinimizedPlayer 
+          isPlaying={playbackState.isPlaying}
+          onTogglePlay={togglePlay}
+          onExitFullscreen={toggleFullscreenBackground}
+          currentSongTitle={currentSong?.title}
+        />
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen w-full overflow-x-hidden relative">
       {/* Background image */}
@@ -183,7 +226,7 @@ const Index = () => {
               isMuted={playbackState.isMuted}
               volume={playbackState.volume}
               isSyncing={syncState.isSyncing}
-              unreadMessages={unreadCount}
+              unreadMessages={0}
               onTogglePlay={togglePlay}
               onSeek={seek}
               onPrevious={playPrevious}
@@ -194,7 +237,7 @@ const Index = () => {
               onVolumeChange={setVolume}
               onToggleFavorite={handleToggleFavorite}
               onToggleSync={toggleSync}
-              onToggleChat={toggleChat}
+              onToggleChat={() => {}}
             />
             
             {/* Song List */}
@@ -213,7 +256,7 @@ const Index = () => {
             </div>
           </div>
           
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6 h-full">
             {/* Play Together */}
             <PlayTogether
               syncState={syncState}
@@ -228,7 +271,18 @@ const Index = () => {
               onDarknessChange={handleDarknessChange}
               blur={blurAmount}
               darkness={darknessAmount}
+              onToggleFullscreen={toggleFullscreenBackground}
+              isFullscreenMode={viewState.isFullscreenBackground}
             />
+            
+            {/* Chat Section */}
+            <div className="flex-1 min-h-[400px]">
+              <ChatSection
+                messages={messages}
+                onSendMessage={sendMessage}
+                onClearChat={clearChat}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -237,16 +291,6 @@ const Index = () => {
       <FloatingPlayTogether 
         syncState={syncState}
         onToggleSync={toggleSync}
-      />
-      
-      {/* Chat Bubble */}
-      <ChatBubble
-        isOpen={isChatOpen}
-        messages={messages}
-        unreadCount={unreadCount}
-        onToggleChat={toggleChat}
-        onSendMessage={sendMessage}
-        onClearChat={clearChat}
       />
     </div>
   );

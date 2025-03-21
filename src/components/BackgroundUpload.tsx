@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Upload, Image, Trash2, Sliders } from 'lucide-react';
+import { Upload, Image, Trash2, Sliders, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -8,6 +8,8 @@ interface BackgroundUploadProps {
   onBackgroundChange: (url: string | null) => void;
   onBlurChange: (blur: number) => void;
   onDarknessChange: (darkness: number) => void;
+  onToggleFullscreen: () => void;
+  isFullscreenMode: boolean;
   blur: number;
   darkness: number;
 }
@@ -16,6 +18,8 @@ const BackgroundUpload: React.FC<BackgroundUploadProps> = ({
   onBackgroundChange,
   onBlurChange,
   onDarknessChange,
+  onToggleFullscreen,
+  isFullscreenMode,
   blur,
   darkness
 }) => {
@@ -97,17 +101,29 @@ const BackgroundUpload: React.FC<BackgroundUploadProps> = ({
           <Image size={20} className="text-white/80 mr-3" />
           <h3 className="text-white font-medium">Background</h3>
         </div>
-        <svg 
-          className={cn(
-            "w-4 h-4 text-white/70 transition-transform duration-300",
-            showSettings ? "transform rotate-180" : ""
-          )} 
-          fill="none" 
-          viewBox="0 0 24 24" 
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <div className="flex items-center gap-2">
+          <button
+            className="text-white/70 hover:text-white transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFullscreen();
+            }}
+            title={isFullscreenMode ? "Exit fullscreen view" : "Enter fullscreen view"}
+          >
+            {isFullscreenMode ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+          <svg 
+            className={cn(
+              "w-4 h-4 text-white/70 transition-transform duration-300",
+              showSettings ? "transform rotate-180" : ""
+            )} 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
       </div>
       
       {showSettings && (

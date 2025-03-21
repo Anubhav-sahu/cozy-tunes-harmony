@@ -2,50 +2,47 @@
 import { useState, useEffect } from 'react';
 import { ViewState, SyncState } from '@/lib/types';
 import { toast } from 'sonner';
+import { syncService } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const useViewStateSync = (syncState: SyncState, initialViewState: ViewState) => {
   const [viewState, setViewState] = useState<ViewState>(initialViewState);
+  const { user } = useAuth();
   
   // Sync view state changes
   useEffect(() => {
-    if (!syncState.isSyncing || !syncState.roomId) return;
+    if (!syncState.isSyncing || !syncState.roomId || !user) return;
     
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key !== `viewState_${syncState.roomId}` || !e.newValue) return;
-      
-      try {
-        const parsedViewState = JSON.parse(e.newValue) as ViewState;
+    const subscription = syncService.subscribeToViewState(syncState.roomId, (newViewState) => {
+      // Only update if it's different
+      if (newViewState.isFullscreenBackground !== viewState.isFullscreenBackground) {
+        setViewState(newViewState);
         
-        // Only update if it's different
-        if (parsedViewState.isFullscreenBackground !== viewState.isFullscreenBackground) {
-          setViewState(parsedViewState);
-          
-          // Notify about the change
-          if (parsedViewState.isFullscreenBackground) {
-            toast.info('Your partner switched to fullscreen view');
-          } else {
-            toast.info('Your partner switched to normal view');
-          }
+        // Notify about the change
+        if (newViewState.isFullscreenBackground) {
+          toast.info('Your partner switched to fullscreen view');
+        } else {
+          toast.info('Your partner switched to normal view');
         }
-      } catch (error) {
-        console.error('Failed to parse view state data:', error);
       }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
+    });
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      subscription.unsubscribe();
     };
-  }, [syncState, viewState]);
+  }, [syncState, viewState, user]);
   
   // Update view state and sync it
-  const updateViewState = (newViewState: ViewState) => {
+  const updateViewState = async (newViewState: ViewState) => {
     setViewState(newViewState);
     
     // If syncing is active, sync the view state change
-    if (syncState.isSyncing && syncState.roomId) {
-      localStorage.setItem(`viewState_${syncState.roomId}`, JSON.stringify(newViewState));
+    if (syncState.isSyncing && syncState.roomId && user) {
+      try {
+        await syncService.updateViewState(syncState.roomId, newViewState);
+      } catch (error) {
+        console.error('Failed to update view state:', error);
+      }
     }
   };
   

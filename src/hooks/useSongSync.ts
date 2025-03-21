@@ -1,10 +1,10 @@
 
 import { useEffect, useState, useRef } from 'react';
-import { SyncState, Song, PlaybackState, ViewState } from '@/lib/types';
+import { SyncState, Song, PlaybackState } from '@/lib/types';
 import { toast } from 'sonner';
+import { syncService } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
-// Mock implementation of sync functionality using localStorage
-// In a real app, you'd use WebSockets or Firebase Realtime Database
 export const useSongSync = (
   songs: Song[],
   currentSongIndex: number,
@@ -21,46 +21,53 @@ export const useSongSync = (
   });
   
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { user } = useAuth();
   
   // Simulate connection with partner
-  const connectWithPartner = () => {
-    // Create a unique room ID (in a real app, this would come from a server)
-    const roomId = `music-sync-${Math.random().toString(36).substring(2, 9)}`;
-    
-    setSyncState(prev => ({
-      ...prev,
-      isConnected: true,
-      roomId,
-      isSyncing: true,
-    }));
-    
-    // In a real app, this would be a connection to a server
-    // For this demo, we'll use localStorage to simulate syncing
-    
-    // Store the room ID in localStorage
-    localStorage.setItem('musicSync_roomId', roomId);
-    
-    // Check for partner online status (simulated)
-    setTimeout(() => {
-      setSyncState(prev => ({
-        ...prev,
-        partnerOnline: true,
-      }));
-      toast.success('Connected with partner! You can now sync music.');
-    }, 1500);
-    
-    // Start sync interval
-    if (syncIntervalRef.current) {
-      clearInterval(syncIntervalRef.current);
+  const connectWithPartner = async () => {
+    if (!user) {
+      toast.error('Please sign in to use the sync feature');
+      return null;
     }
     
-    syncIntervalRef.current = setInterval(() => {
-      if (syncState.isSyncing) {
-        syncPlayback();
+    try {
+      // Create a new sync room in the database
+      const room = await syncService.createSyncRoom(user.id);
+      const roomId = room.id;
+      
+      setSyncState(prev => ({
+        ...prev,
+        isConnected: true,
+        roomId,
+        isSyncing: true,
+      }));
+      
+      // Check for partner online status (simulated for now)
+      setTimeout(() => {
+        setSyncState(prev => ({
+          ...prev,
+          partnerOnline: true,
+        }));
+        toast.success('Connected with partner! You can now sync music.');
+      }, 1500);
+      
+      // Start sync interval
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
       }
-    }, 1000); // Sync every second
-    
-    return roomId;
+      
+      syncIntervalRef.current = setInterval(() => {
+        if (syncState.isSyncing && syncState.roomId) {
+          syncPlayback();
+        }
+      }, 1000); // Sync every second
+      
+      return roomId;
+    } catch (error) {
+      console.error('Failed to create sync room:', error);
+      toast.error('Failed to create sync room');
+      return null;
+    }
   };
   
   const disconnectFromPartner = () => {
@@ -68,11 +75,6 @@ export const useSongSync = (
       clearInterval(syncIntervalRef.current);
       syncIntervalRef.current = null;
     }
-    
-    localStorage.removeItem('musicSync_roomId');
-    localStorage.removeItem('musicSync_currentSong');
-    localStorage.removeItem('musicSync_playbackState');
-    localStorage.removeItem('musicSync_viewState');
     
     setSyncState({
       isConnected: false,
@@ -85,6 +87,11 @@ export const useSongSync = (
   };
   
   const toggleSync = () => {
+    if (!user) {
+      toast.error('Please sign in to use the sync feature');
+      return;
+    }
+    
     if (syncState.isConnected) {
       setSyncState(prev => ({
         ...prev,
@@ -103,68 +110,50 @@ export const useSongSync = (
     }
   };
   
-  const syncPlayback = () => {
-    if (!syncState.isSyncing || !syncState.roomId) return;
+  const syncPlayback = async () => {
+    if (!syncState.isSyncing || !syncState.roomId || !user) return;
     
-    // In a real app, this would send data to the server
-    // For this demo, we'll use localStorage
-    
-    // Store current song and playback state
-    localStorage.setItem('musicSync_currentSong', JSON.stringify({
-      index: currentSongIndex,
-      timestamp: Date.now()
-    }));
-    
-    localStorage.setItem('musicSync_playbackState', JSON.stringify({
-      isPlaying: playbackState.isPlaying,
-      currentTime: playbackState.currentTime,
-      timestamp: Date.now()
-    }));
+    try {
+      await syncService.updatePlaybackState(syncState.roomId, {
+        isPlaying: playbackState.isPlaying,
+        currentTime: playbackState.currentTime,
+        duration: playbackState.duration,
+        volume: playbackState.volume,
+        isMuted: playbackState.isMuted,
+        isShuffled: playbackState.isShuffled,
+        isRepeating: playbackState.isRepeating,
+      });
+    } catch (error) {
+      console.error('Failed to sync playback state:', error);
+    }
   };
   
-  // Listen for changes from partner (simulated)
+  // Listen for changes from partner
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (!syncState.isSyncing) return;
-      
-      // Check if the change is for our sync
-      if (e.key === 'musicSync_currentSong' && e.newValue) {
-        try {
-          const data = JSON.parse(e.newValue);
-          if (data.index !== currentSongIndex) {
-            playSong(data.index);
-            toast.info('Partner changed the song');
-          }
-        } catch (error) {
-          console.error('Failed to parse song sync data:', error);
-        }
-      }
-      
-      if (e.key === 'musicSync_playbackState' && e.newValue) {
-        try {
-          const data = JSON.parse(e.newValue);
-          
-          // Update playback state
-          if (data.isPlaying !== playbackState.isPlaying) {
-            togglePlay();
-          }
-          
-          // Only seek if the time difference is significant (more than 3 seconds)
-          const timeDiff = Math.abs(data.currentTime - playbackState.currentTime);
-          if (timeDiff > 3) {
-            seek(data.currentTime);
-          }
-        } catch (error) {
-          console.error('Failed to parse playback sync data:', error);
-        }
-      }
-    };
+    if (!syncState.isSyncing || !syncState.roomId || !user) return;
     
-    // Listen for storage events (simulating partner actions)
-    window.addEventListener('storage', handleStorageChange);
+    const subscription = syncService.subscribeToPlaybackState(syncState.roomId, (newPlaybackState) => {
+      // Update song selection
+      if (songs.length > 0 && newPlaybackState.currentSongIndex !== undefined && 
+          newPlaybackState.currentSongIndex !== currentSongIndex) {
+        playSong(newPlaybackState.currentSongIndex);
+        toast.info('Partner changed the song');
+      }
+      
+      // Update playback state
+      if (newPlaybackState.isPlaying !== playbackState.isPlaying) {
+        togglePlay();
+      }
+      
+      // Only seek if the time difference is significant (more than 3 seconds)
+      const timeDiff = Math.abs(newPlaybackState.currentTime - playbackState.currentTime);
+      if (timeDiff > 3) {
+        seek(newPlaybackState.currentTime);
+      }
+    });
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      subscription.unsubscribe();
       
       // Clean up sync interval
       if (syncIntervalRef.current) {
@@ -172,19 +161,20 @@ export const useSongSync = (
       }
     };
   }, [
-    syncState.isSyncing, 
-    currentSongIndex, 
-    playbackState.isPlaying, 
-    playbackState.currentTime
+    syncState.isSyncing,
+    syncState.roomId,
+    currentSongIndex,
+    playbackState.isPlaying,
+    playbackState.currentTime,
+    user
   ]);
   
   // Share the current sync link
   const shareSyncLink = () => {
     if (!syncState.roomId) return;
     
-    // In a real app, this would generate a join link
-    // For this demo, we'll just create a fictitious link
-    const syncLink = `https://yourmusicapp.com/join/${syncState.roomId}`;
+    // Create a join link
+    const syncLink = `${window.location.origin}/join/${syncState.roomId}`;
     
     // Copy to clipboard
     navigator.clipboard.writeText(syncLink).then(() => {

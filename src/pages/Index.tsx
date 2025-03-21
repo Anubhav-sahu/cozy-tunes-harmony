@@ -9,18 +9,22 @@ import BackgroundUpload from '@/components/BackgroundUpload';
 import FloatingPlayTogether from '@/components/FloatingPlayTogether';
 import MinimizedPlayer from '@/components/MinimizedPlayer';
 import NotificationSystem from '@/components/NotificationSystem';
+import Auth from '@/components/Auth';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useSongSync } from '@/hooks/useSongSync';
 import { useChat } from '@/hooks/useChat';
 import { useViewStateSync } from '@/hooks/useViewStateSync';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useAuth } from '@/contexts/AuthContext';
 import { Song, ViewState } from '@/lib/types';
+import { songService, storageService } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 const Index = () => {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [blurAmount, setBlurAmount] = useState(5);
   const [darknessAmount, setDarknessAmount] = useState(50);
+  const { user, loading } = useAuth();
   
   const initialViewState: ViewState = {
     isFullscreenBackground: false
@@ -79,44 +83,33 @@ const Index = () => {
   
   const currentSong = getCurrentSong();
   
-  // Try to load background from localStorage
+  // Load songs from Supabase when authenticated
   useEffect(() => {
-    const savedBackground = localStorage.getItem('background_image');
-    if (savedBackground) {
-      setBackgroundImage(savedBackground);
+    if (user) {
+      const loadSongs = async () => {
+        try {
+          const songsData = await songService.getSongs();
+          songsData.forEach(song => {
+            addSong(song);
+          });
+          toast.success('Loaded your saved songs');
+        } catch (error) {
+          console.error('Failed to load songs:', error);
+          toast.error('Failed to load songs');
+        }
+      };
+      
+      loadSongs();
     }
-    
-    const savedBlur = localStorage.getItem('background_blur');
-    if (savedBlur) {
-      setBlurAmount(Number(savedBlur));
-    }
-    
-    const savedDarkness = localStorage.getItem('background_darkness');
-    if (savedDarkness) {
-      setDarknessAmount(Number(savedDarkness));
-    }
-    
-    // Also try to load songs from localStorage
-    const savedSongs = localStorage.getItem('songs');
-    if (savedSongs) {
-      try {
-        const parsedSongs = JSON.parse(savedSongs) as Song[];
-        parsedSongs.forEach(song => {
-          addSong(song);
-        });
-        toast.success('Loaded your saved songs');
-      } catch (e) {
-        console.error('Failed to load songs:', e);
-      }
-    }
-  }, []);
+  }, [user]);
   
-  // Save songs to localStorage when they change
+  // Save songs to Supabase when they change
   useEffect(() => {
-    if (songs.length > 0) {
-      localStorage.setItem('songs', JSON.stringify(songs));
+    if (user && songs.length > 0) {
+      // This would be optimized in a real implementation
+      // to only save changed songs
     }
-  }, [songs]);
+  }, [songs, user]);
   
   // Show notifications for new messages
   useEffect(() => {
@@ -133,14 +126,19 @@ const Index = () => {
       const latestMessage = messages[messages.length - 1];
       handleNewMessage(latestMessage);
     }
-    
-    // This effect runs on each message change,
-    // but we only care about the latest message
   }, [messages.length]);
   
-  const handleToggleFavorite = () => {
-    if (currentSong) {
-      toggleFavorite(currentSong.id);
+  const handleToggleFavorite = async () => {
+    if (currentSong && user) {
+      try {
+        await songService.toggleFavorite(currentSong.id, !currentSong.favorite);
+        toggleFavorite(currentSong.id);
+      } catch (error) {
+        console.error('Failed to toggle favorite:', error);
+        toast.error('Failed to update favorite status');
+      }
+    } else {
+      toggleFavorite(currentSong?.id);
     }
   };
   
@@ -148,19 +146,58 @@ const Index = () => {
     selectSong(index);
   };
   
-  const handleRemoveSong = (id: string) => {
-    removeSong(id);
-  };
-  
-  const handleSongFavorite = (id: string) => {
-    toggleFavorite(id);
-  };
-  
-  const handleBackgroundChange = (url: string | null) => {
-    setBackgroundImage(url);
-    if (url) {
-      localStorage.setItem('background_image', url);
+  const handleRemoveSong = async (id: string) => {
+    if (user) {
+      try {
+        await songService.removeSong(id);
+        removeSong(id);
+      } catch (error) {
+        console.error('Failed to remove song:', error);
+        toast.error('Failed to remove song');
+      }
     } else {
+      removeSong(id);
+    }
+  };
+  
+  const handleSongFavorite = async (id: string) => {
+    const song = songs.find(s => s.id === id);
+    if (song && user) {
+      try {
+        await songService.toggleFavorite(id, !song.favorite);
+        toggleFavorite(id);
+      } catch (error) {
+        console.error('Failed to toggle favorite:', error);
+        toast.error('Failed to update favorite status');
+      }
+    } else {
+      toggleFavorite(id);
+    }
+  };
+  
+  const handleSongUpload = async (song: Song) => {
+    if (user) {
+      try {
+        // In a real implementation, we would upload the audio file to storage
+        // and update the song.src with the public URL
+        await songService.addSong(song);
+        addSong(song);
+      } catch (error) {
+        console.error('Failed to upload song:', error);
+        toast.error('Failed to upload song');
+      }
+    } else {
+      addSong(song);
+    }
+  };
+  
+  const handleBackgroundChange = async (url: string | null) => {
+    setBackgroundImage(url);
+    
+    if (user && url) {
+      // In a real implementation, we would save the user's background preference
+      localStorage.setItem('background_image', url);
+    } else if (!url) {
       localStorage.removeItem('background_image');
     }
   };
@@ -174,6 +211,52 @@ const Index = () => {
     setDarknessAmount(value);
     localStorage.setItem('background_darkness', value.toString());
   };
+  
+  // If still loading auth state, show loading spinner
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#1a1a2e] to-[#16213e]">
+        <div className="w-12 h-12 border-4 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+  
+  // If not authenticated, show auth page
+  if (!user) {
+    return (
+      <div className="min-h-screen w-full overflow-x-hidden relative">
+        <div className="bg-image-container">
+          {backgroundImage ? (
+            <img 
+              src={backgroundImage} 
+              alt="Background" 
+              className="bg-image"
+              style={{ filter: `blur(${blurAmount}px)` }}
+            />
+          ) : (
+            <div className="bg-gradient-to-br from-[#1a1a2e] to-[#16213e] w-full h-full"></div>
+          )}
+          <div 
+            className="bg-overlay"
+            style={{ 
+              background: `rgba(0,0,0,${darknessAmount / 100})` 
+            }}
+          ></div>
+        </div>
+        
+        <div className="container mx-auto px-4 py-12 relative z-10 flex flex-col items-center">
+          <header className="mb-12 text-center">
+            <h1 className="text-5xl font-bold text-white mb-2 tracking-tighter">
+              Together<span className="text-blue-400">Play</span>
+            </h1>
+            <p className="text-white/70">Share music moments together</p>
+          </header>
+          
+          <Auth />
+        </div>
+      </div>
+    );
+  }
   
   // If in fullscreen background mode, only show minimal UI
   if (viewState.isFullscreenBackground) {

@@ -2,108 +2,108 @@
 import { useState, useEffect } from 'react';
 import { ChatMessage } from '@/lib/types';
 import { toast } from 'sonner';
+import { chatService } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
-// Mock implementation of chat functionality using localStorage
-// In a real app, you'd use WebSockets or Firebase Realtime Database
 export const useChat = (syncRoomId: string | null) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { user } = useAuth();
 
   // Load initial messages
   useEffect(() => {
-    if (syncRoomId) {
-      try {
-        const storedMessages = localStorage.getItem(`chat_${syncRoomId}`);
-        if (storedMessages) {
-          setMessages(JSON.parse(storedMessages));
-        } else {
-          // Initialize with welcome message
-          const initialMessage: ChatMessage = {
-            id: 'welcome',
-            text: 'Chat is ready. Say hello to your partner!',
-            sender: 'partner',
-            timestamp: Date.now(),
-          };
-          setMessages([initialMessage]);
-          localStorage.setItem(`chat_${syncRoomId}`, JSON.stringify([initialMessage]));
+    if (syncRoomId && user) {
+      const fetchMessages = async () => {
+        try {
+          const messagesData = await chatService.getMessages(syncRoomId);
+          
+          if (messagesData.length === 0) {
+            // Initialize with welcome message
+            const initialMessage: ChatMessage = {
+              id: 'welcome',
+              text: 'Chat is ready. Say hello to your partner!',
+              sender: 'partner',
+              timestamp: Date.now(),
+            };
+            
+            await chatService.sendMessage({
+              ...initialMessage,
+              roomId: syncRoomId
+            });
+            
+            setMessages([initialMessage]);
+          } else {
+            setMessages(messagesData);
+          }
+        } catch (error) {
+          console.error('Failed to load chat messages:', error);
+          toast.error('Failed to load chat messages');
         }
-      } catch (error) {
-        console.error('Failed to load chat messages:', error);
-      }
+      };
+      
+      fetchMessages();
     } else {
       setMessages([]);
     }
-  }, [syncRoomId]);
+  }, [syncRoomId, user]);
 
-  // Save messages to storage whenever they change
+  // Subscribe to new messages
   useEffect(() => {
-    if (syncRoomId && messages.length > 0) {
-      localStorage.setItem(`chat_${syncRoomId}`, JSON.stringify(messages));
-    }
-  }, [messages, syncRoomId]);
-
-  // Listen for new messages (simulated with storage events)
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (syncRoomId && e.key === `chat_${syncRoomId}` && e.newValue) {
-        try {
-          const newMessages = JSON.parse(e.newValue);
-          setMessages(newMessages);
-        } catch (error) {
-          console.error('Failed to parse chat data:', error);
-        }
-      }
-    };
+    if (!syncRoomId || !user) return;
     
-    window.addEventListener('storage', handleStorageChange);
+    const subscription = chatService.subscribeToMessages(syncRoomId, (newMessage) => {
+      setMessages(prev => {
+        // Avoid duplicates
+        if (prev.some(msg => msg.id === newMessage.id)) {
+          return prev;
+        }
+        return [...prev, newMessage];
+      });
+      
+      // Show notification for partner messages
+      if (newMessage.sender === 'partner') {
+        toast.info(`New message: ${newMessage.text}`);
+      }
+    });
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      subscription.unsubscribe();
     };
-  }, [syncRoomId]);
+  }, [syncRoomId, user]);
 
-  const sendMessage = (text: string) => {
-    if (!text.trim() || !syncRoomId) return;
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || !syncRoomId || !user) return;
     
     const newMessage: ChatMessage = {
       id: `msg_${Date.now()}`,
       text,
       sender: 'me',
       timestamp: Date.now(),
+      roomId: syncRoomId
     };
     
+    // Optimistically update UI
     setMessages(prev => [...prev, newMessage]);
     
-    // Simulate partner response (in a real app, this would come from WebSockets)
-    setTimeout(() => {
-      // 30% chance of getting a response
-      if (Math.random() < 0.3) {
-        const responses = [
-          "I love this song!",
-          "❤️",
-          "Skip this one?",
-          "This reminds me of our first date",
-          "Turn up the volume!",
-          "Let's listen to our playlist",
-          "I miss you"
-        ];
-        
-        const responseMessage: ChatMessage = {
-          id: `msg_${Date.now()}`,
-          text: responses[Math.floor(Math.random() * responses.length)],
-          sender: 'partner',
-          timestamp: Date.now(),
-        };
-        
-        setMessages(prev => [...prev, responseMessage]);
-      }
-    }, 2000 + Math.random() * 5000);
+    try {
+      await chatService.sendMessage(newMessage);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      toast.error('Failed to send message');
+      // Remove the message if it failed to send
+      setMessages(prev => prev.filter(msg => msg.id !== newMessage.id));
+    }
   };
 
-  const clearChat = () => {
-    if (syncRoomId) {
-      localStorage.removeItem(`chat_${syncRoomId}`);
+  const clearChat = async () => {
+    if (!syncRoomId || !user) return;
+    
+    try {
+      await chatService.clearChat(syncRoomId);
       setMessages([]);
       toast.success('Chat cleared');
+    } catch (error) {
+      console.error('Failed to clear chat:', error);
+      toast.error('Failed to clear chat');
     }
   };
 

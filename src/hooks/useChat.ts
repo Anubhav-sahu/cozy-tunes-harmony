@@ -48,12 +48,6 @@ export const useChat = (syncRoomId: string | null) => {
         try {
           const newMessages = JSON.parse(e.newValue);
           setMessages(newMessages);
-          
-          // Show toast for the latest message
-          const latestMessage = newMessages[newMessages.length - 1];
-          if (latestMessage && latestMessage.sender === 'partner') {
-            toast.info(`New message: ${latestMessage.text}`);
-          }
         } catch (error) {
           console.error('Failed to parse chat data:', error);
         }
@@ -65,7 +59,7 @@ export const useChat = (syncRoomId: string | null) => {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [syncRoomId, messages]);
+  }, [syncRoomId]);
 
   const sendMessage = (text: string) => {
     if (!text.trim() || !syncRoomId) return;
@@ -101,7 +95,6 @@ export const useChat = (syncRoomId: string | null) => {
         };
         
         setMessages(prev => [...prev, responseMessage]);
-        toast.info(`New message: ${responseMessage.text}`);
       }
     }, 2000 + Math.random() * 5000);
   };

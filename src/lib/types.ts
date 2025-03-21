@@ -39,3 +39,11 @@ export interface SyncState {
 export interface ViewState {
   isFullscreenBackground: boolean;
 }
+
+export interface Notification {
+  id: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  timestamp: number;
+  autoHide?: boolean;
+}

@@ -8,9 +8,12 @@ import ChatSection from '@/components/ChatSection';
 import BackgroundUpload from '@/components/BackgroundUpload';
 import FloatingPlayTogether from '@/components/FloatingPlayTogether';
 import MinimizedPlayer from '@/components/MinimizedPlayer';
+import NotificationSystem from '@/components/NotificationSystem';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useSongSync } from '@/hooks/useSongSync';
 import { useChat } from '@/hooks/useChat';
+import { useViewStateSync } from '@/hooks/useViewStateSync';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Song, ViewState } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -18,9 +21,10 @@ const Index = () => {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [blurAmount, setBlurAmount] = useState(5);
   const [darknessAmount, setDarknessAmount] = useState(50);
-  const [viewState, setViewState] = useState<ViewState>({
+  
+  const initialViewState: ViewState = {
     isFullscreenBackground: false
-  });
+  };
   
   const {
     songs,
@@ -57,10 +61,21 @@ const Index = () => {
   );
   
   const {
+    notifications,
+    addNotification,
+    removeNotification
+  } = useNotifications();
+  
+  const {
     messages,
     sendMessage,
     clearChat
   } = useChat(syncState.roomId);
+  
+  const {
+    viewState,
+    toggleFullscreenBackground
+  } = useViewStateSync(syncState, initialViewState);
   
   const currentSong = getCurrentSong();
   
@@ -103,6 +118,26 @@ const Index = () => {
     }
   }, [songs]);
   
+  // Show notifications for new messages
+  useEffect(() => {
+    const handleNewMessage = (message) => {
+      if (message.sender === 'partner') {
+        addNotification({
+          message: `New message: ${message.text}`,
+          type: 'info'
+        });
+      }
+    };
+    
+    if (messages.length > 0) {
+      const latestMessage = messages[messages.length - 1];
+      handleNewMessage(latestMessage);
+    }
+    
+    // This effect runs on each message change,
+    // but we only care about the latest message
+  }, [messages.length]);
+  
   const handleToggleFavorite = () => {
     if (currentSong) {
       toggleFavorite(currentSong.id);
@@ -140,13 +175,6 @@ const Index = () => {
     localStorage.setItem('background_darkness', value.toString());
   };
   
-  const toggleFullscreenBackground = () => {
-    setViewState(prev => ({
-      ...prev,
-      isFullscreenBackground: !prev.isFullscreenBackground
-    }));
-  };
-  
   // If in fullscreen background mode, only show minimal UI
   if (viewState.isFullscreenBackground) {
     return (
@@ -170,6 +198,12 @@ const Index = () => {
             }}
           ></div>
         </div>
+        
+        {/* Notification System */}
+        <NotificationSystem 
+          notifications={notifications} 
+          onDismiss={removeNotification} 
+        />
         
         {/* Minimized Player Control */}
         <MinimizedPlayer 
@@ -203,6 +237,12 @@ const Index = () => {
           }}
         ></div>
       </div>
+      
+      {/* Notification System */}
+      <NotificationSystem 
+        notifications={notifications} 
+        onDismiss={removeNotification} 
+      />
       
       {/* Main content */}
       <div className="container mx-auto px-4 py-8 relative z-10">

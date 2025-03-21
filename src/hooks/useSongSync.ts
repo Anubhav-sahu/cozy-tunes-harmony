@@ -1,6 +1,6 @@
 
 import { useEffect, useState, useRef } from 'react';
-import { SyncState, Song, PlaybackState } from '@/lib/types';
+import { SyncState, Song, PlaybackState, ViewState } from '@/lib/types';
 import { toast } from 'sonner';
 
 // Mock implementation of sync functionality using localStorage
@@ -72,6 +72,7 @@ export const useSongSync = (
     localStorage.removeItem('musicSync_roomId');
     localStorage.removeItem('musicSync_currentSong');
     localStorage.removeItem('musicSync_playbackState');
+    localStorage.removeItem('musicSync_viewState');
     
     setSyncState({
       isConnected: false,

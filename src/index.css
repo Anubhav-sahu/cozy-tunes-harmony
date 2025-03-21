@@ -110,6 +110,17 @@
   .float-shadow {
     filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
   }
+  
+  /* Pulsing animation for floating buttons */
+  .pulse-ring {
+    @apply absolute inset-0 rounded-full;
+    animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+  }
+  
+  /* Floating icon animation */
+  .float-animate {
+    animation: float 6s ease-in-out infinite;
+  }
 }
 
 .bg-image-container {
@@ -156,4 +167,32 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+/* Floating animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
 }

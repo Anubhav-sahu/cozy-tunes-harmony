@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Users, Link, CheckCircle, XCircle } from 'lucide-react';
+import { Users, Link, CheckCircle, XCircle, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SyncState } from '@/lib/types';
 import { toast } from 'sonner';

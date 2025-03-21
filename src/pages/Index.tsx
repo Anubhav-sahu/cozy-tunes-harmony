@@ -6,10 +6,12 @@ import UploadSong from '@/components/UploadSong';
 import PlayTogether from '@/components/PlayTogether';
 import ChatBubble from '@/components/ChatBubble';
 import BackgroundUpload from '@/components/BackgroundUpload';
+import FloatingPlayTogether from '@/components/FloatingPlayTogether';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useSongSync } from '@/hooks/useSongSync';
 import { useChat } from '@/hooks/useChat';
 import { Song } from '@/lib/types';
+import { toast } from 'sonner';
 
 const Index = () => {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
@@ -61,6 +63,45 @@ const Index = () => {
   
   const currentSong = getCurrentSong();
   
+  // Try to load background from localStorage
+  useEffect(() => {
+    const savedBackground = localStorage.getItem('background_image');
+    if (savedBackground) {
+      setBackgroundImage(savedBackground);
+    }
+    
+    const savedBlur = localStorage.getItem('background_blur');
+    if (savedBlur) {
+      setBlurAmount(Number(savedBlur));
+    }
+    
+    const savedDarkness = localStorage.getItem('background_darkness');
+    if (savedDarkness) {
+      setDarknessAmount(Number(savedDarkness));
+    }
+    
+    // Also try to load songs from localStorage
+    const savedSongs = localStorage.getItem('songs');
+    if (savedSongs) {
+      try {
+        const parsedSongs = JSON.parse(savedSongs) as Song[];
+        parsedSongs.forEach(song => {
+          addSong(song);
+        });
+        toast.success('Loaded your saved songs');
+      } catch (e) {
+        console.error('Failed to load songs:', e);
+      }
+    }
+  }, []);
+  
+  // Save songs to localStorage when they change
+  useEffect(() => {
+    if (songs.length > 0) {
+      localStorage.setItem('songs', JSON.stringify(songs));
+    }
+  }, [songs]);
+  
   const handleToggleFavorite = () => {
     if (currentSong) {
       toggleFavorite(currentSong.id);
@@ -81,6 +122,21 @@ const Index = () => {
   
   const handleBackgroundChange = (url: string | null) => {
     setBackgroundImage(url);
+    if (url) {
+      localStorage.setItem('background_image', url);
+    } else {
+      localStorage.removeItem('background_image');
+    }
+  };
+  
+  const handleBlurChange = (value: number) => {
+    setBlurAmount(value);
+    localStorage.setItem('background_blur', value.toString());
+  };
+  
+  const handleDarknessChange = (value: number) => {
+    setDarknessAmount(value);
+    localStorage.setItem('background_darkness', value.toString());
   };
   
   return (
@@ -168,14 +224,20 @@ const Index = () => {
             {/* Background Customization */}
             <BackgroundUpload
               onBackgroundChange={handleBackgroundChange}
-              onBlurChange={setBlurAmount}
-              onDarknessChange={setDarknessAmount}
+              onBlurChange={handleBlurChange}
+              onDarknessChange={handleDarknessChange}
               blur={blurAmount}
               darkness={darknessAmount}
             />
           </div>
         </div>
       </div>
+      
+      {/* Floating Play Together Button */}
+      <FloatingPlayTogether 
+        syncState={syncState}
+        onToggleSync={toggleSync}
+      />
       
       {/* Chat Bubble */}
       <ChatBubble

@@ -7,6 +7,8 @@ export interface Song {
   src: string;
   cover?: string;
   favorite: boolean;
+  lyrics?: string;
+  addedAt?: number; // Timestamp when the song was added
 }
 
 export interface ChatMessage {
@@ -31,4 +33,5 @@ export interface SyncState {
   partnerOnline: boolean;
   roomId: string | null;
   isSyncing: boolean;
+  lastSyncTime?: number; // When was the last sync
 }

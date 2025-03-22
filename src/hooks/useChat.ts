@@ -23,12 +23,10 @@ export const useChat = (syncRoomId: string | null) => {
               text: 'Chat is ready. Say hello to your partner!',
               sender: 'partner',
               timestamp: Date.now(),
+              roomId: syncRoomId // This is now a valid property
             };
             
-            await chatService.sendMessage({
-              ...initialMessage,
-              roomId: syncRoomId
-            });
+            await chatService.sendMessage(initialMessage);
             
             setMessages([initialMessage]);
           } else {
@@ -78,7 +76,7 @@ export const useChat = (syncRoomId: string | null) => {
       text,
       sender: 'me',
       timestamp: Date.now(),
-      roomId: syncRoomId
+      roomId: syncRoomId // This is now a valid property
     };
     
     // Optimistically update UI

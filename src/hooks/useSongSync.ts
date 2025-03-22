@@ -122,6 +122,7 @@ export const useSongSync = (
         isMuted: playbackState.isMuted,
         isShuffled: playbackState.isShuffled,
         isRepeating: playbackState.isRepeating,
+        currentSongIndex: currentSongIndex, // Use the parameter instead of accessing it from playbackState
       });
     } catch (error) {
       console.error('Failed to sync playback state:', error);

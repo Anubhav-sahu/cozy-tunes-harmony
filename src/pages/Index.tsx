@@ -6,7 +6,7 @@ import { useChat } from '@/hooks/useChat';
 import { useViewStateSync } from '@/hooks/useViewStateSync';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/contexts/AuthContext';
-import { ViewState, Notification } from '@/lib/types';
+import { ViewState, Notification, Song } from '@/lib/types';
 import { songService } from '@/lib/supabase';
 import { toast } from 'sonner';
 import AppLayout from '@/components/AppLayout';
@@ -87,10 +87,9 @@ const Index = () => {
         try {
           const songsData = await songService.getSongs();
           songsData.forEach(song => {
-            addSong({
-              ...song,
-              user_id: user.id // Ensure user_id is set for new songs
-            });
+            // Convert to Song type by omitting user_id
+            const { user_id, ...songData } = song;
+            addSong(songData as unknown as Song);
           });
           
           if (songsData.length > 0) {
@@ -144,6 +143,7 @@ const Index = () => {
       const latestMessage = messages[messages.length - 1];
       if (latestMessage.sender === 'partner') {
         addNotification({
+          id: `msg_${Date.now()}`,
           type: 'info',
           message: `New message: ${latestMessage.text}`,
           timestamp: Date.now(),
@@ -175,15 +175,11 @@ const Index = () => {
   
   const handleSongUpload = (song: Song) => {
     if (user) {
-      // Add the user ID to the song
-      const songWithUser = {
+      // Add the song locally
+      addSong({
         ...song,
-        user_id: user.id,
         addedAt: Date.now()
-      };
-      
-      // Add to local state and save to database
-      addSong(songWithUser);
+      });
       
       // If connected with a partner, notify them
       if (syncState.isConnected && syncState.partnerOnline) {

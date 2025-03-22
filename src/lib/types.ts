@@ -16,7 +16,7 @@ export interface ChatMessage {
   text: string;
   sender: 'me' | 'partner';
   timestamp: number;
-  roomId?: string; // Add roomId property to fix the type error
+  roomId?: string;
 }
 
 export interface PlaybackState {
@@ -27,7 +27,7 @@ export interface PlaybackState {
   isMuted: boolean;
   isShuffled: boolean;
   isRepeating: boolean;
-  currentSongIndex?: number; // Add currentSongIndex property to fix the type error
+  currentSongIndex?: number;
 }
 
 export interface SyncState {

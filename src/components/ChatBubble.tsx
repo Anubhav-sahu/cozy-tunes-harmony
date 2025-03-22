@@ -4,6 +4,14 @@ import { MessageCircle, X, Send, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatMessage } from '@/lib/types';
 
+// Individual message bubble props
+interface MessageBubbleProps {
+  message: string;
+  sender: "me" | "partner";
+  timestamp: number;
+}
+
+// Main chat bubble component props
 interface ChatBubbleProps {
   isOpen: boolean;
   messages: ChatMessage[];
@@ -12,6 +20,31 @@ interface ChatBubbleProps {
   onSendMessage: (text: string) => void;
   onClearChat: () => void;
 }
+
+// Message bubble sub-component
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, sender, timestamp }) => {
+  // Format timestamp
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  
+  return (
+    <div
+      className={cn(
+        "max-w-[80%] mb-2 p-2 rounded-lg",
+        sender === 'me'
+          ? "bg-blue-500/80 ml-auto rounded-br-none"
+          : "bg-white/10 rounded-bl-none"
+      )}
+    >
+      <p className="text-white text-sm">{message}</p>
+      <p className="text-right text-white/60 text-xs mt-1">
+        {formatTime(timestamp)}
+      </p>
+    </div>
+  );
+};
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
   isOpen,
@@ -47,12 +80,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       onSendMessage(message);
       setMessage('');
     }
-  };
-  
-  // Format timestamp
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
   if (!isOpen) {
@@ -112,20 +139,12 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </div>
         ) : (
           messages.map((msg) => (
-            <div
+            <MessageBubble
               key={msg.id}
-              className={cn(
-                "max-w-[80%] mb-2 p-2 rounded-lg",
-                msg.sender === 'me'
-                  ? "bg-blue-500/80 ml-auto rounded-br-none"
-                  : "bg-white/10 rounded-bl-none"
-              )}
-            >
-              <p className="text-white text-sm">{msg.text}</p>
-              <p className="text-right text-white/60 text-xs mt-1">
-                {formatTime(msg.timestamp)}
-              </p>
-            </div>
+              message={msg.text}
+              sender={msg.sender}
+              timestamp={msg.timestamp}
+            />
           ))
         )}
         <div ref={messagesEndRef} />

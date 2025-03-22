@@ -1,5 +1,5 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, User, UserResponse } from '@supabase/supabase-js';
 import { Song, ChatMessage, ViewState, PlaybackState } from './types';
 
 // Get environment variables or use fallback values
@@ -19,6 +19,40 @@ export const TABLES = {
   PROFILES: 'profiles', 
 };
 
+// Types for Supabase returned objects
+interface SongRecord extends Omit<Song, 'id'> {
+  id: string;
+  user_id: string;
+  addedAt?: number;
+}
+
+interface ChatMessageRecord {
+  id: string;
+  room_id: string;
+  sender_id: string;
+  text: string;
+  timestamp: string;
+  is_read: boolean;
+}
+
+interface ProfileRecord {
+  id: string;
+  username?: string;
+  display_name?: string;
+  email?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface SyncRoomRecord {
+  id: string;
+  owner_id: string;
+  partner_id?: string;
+  created_at?: string;
+  last_activity?: string;
+  active: boolean;
+}
+
 // Song-related functions
 export const songService = {
   async getSongs() {
@@ -32,7 +66,7 @@ export const songService = {
     }
     
     // Sort the data in JavaScript 
-    return (data as Song[]).sort((a, b) => {
+    return (data as SongRecord[]).sort((a, b) => {
       const dateA = a.addedAt || 0;
       const dateB = b.addedAt || 0;
       return dateB - dateA; // Sort descending (newest first)
@@ -66,14 +100,14 @@ export const songService = {
     }
     
     // Sort the data
-    return (songs as Song[]).sort((a, b) => {
+    return (songs as SongRecord[]).sort((a, b) => {
       const dateA = a.addedAt || 0;
       const dateB = b.addedAt || 0;
       return dateB - dateA; // Sort descending (newest first)
     });
   },
   
-  async addSong(song: Song) {
+  async addSong(song: SongRecord) {
     const { error } = await supabase
       .from(TABLES.SONGS)
       .insert([song]);
@@ -84,7 +118,7 @@ export const songService = {
     }
   },
   
-  async updateSong(song: Song) {
+  async updateSong(song: SongRecord) {
     const { error } = await supabase
       .from(TABLES.SONGS)
       .update(song)
@@ -139,21 +173,21 @@ export const chatService = {
     return (data || []).map(msg => ({
       id: msg.id,
       text: msg.text,
-      sender: msg.sender_id === supabase.auth.getUser()?.data?.user?.id ? 'me' : 'partner',
+      sender: msg.sender_id === (supabase.auth.getUser().then(res => res.data.user?.id)) ? 'me' : 'partner',
       timestamp: new Date(msg.timestamp).getTime(),
       roomId: msg.room_id
     })) as ChatMessage[];
   },
   
   async sendMessage(message: ChatMessage) {
-    const { data: userData } = await supabase.auth.getUser();
+    const userData = await supabase.auth.getUser();
     
     const { error } = await supabase
       .from(TABLES.CHAT_MESSAGES)
       .insert([{
         room_id: message.roomId,
         text: message.text,
-        sender_id: userData?.user?.id,
+        sender_id: userData.data.user?.id,
         timestamp: new Date().toISOString(),
         is_read: false
       }]);
@@ -189,13 +223,13 @@ export const chatService = {
         table: TABLES.CHAT_MESSAGES,
         filter: `room_id=eq.${roomId}`
       },
-      (payload) => {
-        const rawMsg = payload.new;
-        const { data: userData } = supabase.auth.getUser();
+      async (payload) => {
+        const rawMsg = payload.new as ChatMessageRecord;
+        const userData = await supabase.auth.getUser();
         const formattedMessage: ChatMessage = {
           id: rawMsg.id,
           text: rawMsg.text,
-          sender: rawMsg.sender_id === userData?.user?.id ? 'me' : 'partner',
+          sender: rawMsg.sender_id === userData.data.user?.id ? 'me' : 'partner',
           timestamp: new Date(rawMsg.timestamp).getTime(),
           roomId: rawMsg.room_id
         };
@@ -320,12 +354,20 @@ export const connectionService = {
       return data.map(conn => {
         const isOwner = conn.owner_id === userId;
         const partnerId = isOwner ? conn.partner_id : conn.owner_id;
-        const partnerProfile = isOwner ? conn.profiles.partner_id : conn.profiles.owner_id;
+        
+        // Access profile data with appropriate typecasting
+        const ownerProfile = conn.profiles as any;
+        const ownerData = ownerProfile.owner_id as {email?: string, display_name?: string};
+        
+        const partnerProfile = conn.profiles as any;
+        const partnerData = partnerProfile.partner_id as {email?: string, display_name?: string};
+        
+        const partnerInfo = isOwner ? partnerData : ownerData;
         
         return {
           id: conn.id,
           partnerId,
-          partnerName: partnerProfile?.display_name || partnerProfile?.email || 'Unknown User',
+          partnerName: partnerInfo?.display_name || partnerInfo?.email || 'Unknown User',
           createdAt: conn.created_at,
           lastActivity: conn.last_activity,
           active: conn.active
@@ -444,18 +486,20 @@ export const syncService = {
           filter: `room_id=eq.${roomId}`
         },
         (payload) => {
-          const rawState = payload.new;
+          const rawState = payload.new || {};
+          
           // Map from DB schema to our app's expected format
           const playbackState: PlaybackState = {
-            isPlaying: rawState.is_playing,
-            currentTime: rawState.current_position,
-            duration: rawState.duration_value,
-            volume: rawState.volume,
-            isMuted: rawState.is_muted,
-            isShuffled: rawState.is_shuffled,
-            isRepeating: rawState.is_repeating,
-            currentSongIndex: rawState.current_song_index
+            isPlaying: Boolean(rawState.is_playing),
+            currentTime: Number(rawState.current_position || 0),
+            duration: Number(rawState.duration_value || 0),
+            volume: Number(rawState.volume || 1),
+            isMuted: Boolean(rawState.is_muted),
+            isShuffled: Boolean(rawState.is_shuffled),
+            isRepeating: Boolean(rawState.is_repeating),
+            currentSongIndex: typeof rawState.current_song_index === 'number' ? rawState.current_song_index : undefined
           };
+          
           callback(playbackState);
         }
       );
@@ -481,11 +525,13 @@ export const syncService = {
           filter: `room_id=eq.${roomId}`
         },
         (payload) => {
-          const rawState = payload.new;
+          const rawState = payload.new || {};
+          
           // Map from DB schema to our app's expected format
           const viewState: ViewState = {
-            isFullscreenBackground: rawState.is_fullscreen_background
+            isFullscreenBackground: Boolean(rawState.is_fullscreen_background)
           };
+          
           callback(viewState);
         }
       );
@@ -504,22 +550,22 @@ export const authService = {
   async signUp(email: string, password: string) {
     try {
       // Sign up the user
-      const { data, error } = await supabase.auth.signUp({
+      const result = await supabase.auth.signUp({
         email,
         password,
       });
       
-      if (error) {
-        console.error('Error signing up:', error);
-        throw error;
+      if (result.error) {
+        console.error('Error signing up:', result.error);
+        throw result.error;
       }
       
       // If successful, create a profile entry
-      if (data.user) {
+      if (result.data.user) {
         const { error: profileError } = await supabase
           .from(TABLES.PROFILES)
           .insert([{
-            id: data.user.id,
+            id: result.data.user.id,
             username: email.split('@')[0], // Default username from email
             display_name: email.split('@')[0], // Default display name
             email: email, // Store email in profiles for easier lookup
@@ -532,7 +578,7 @@ export const authService = {
         }
       }
       
-      return data;
+      return result;
     } catch (error) {
       console.error("Error in signUp:", error);
       throw error;
@@ -541,29 +587,29 @@ export const authService = {
   
   async signIn(email: string, password: string) {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const result = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       
-      if (error) {
-        console.error('Error signing in:', error);
-        throw error;
+      if (result.error) {
+        console.error('Error signing in:', result.error);
+        throw result.error;
       }
       
       // Update the last_online status
-      if (data.user) {
+      if (result.data.user) {
         const { error: profileError } = await supabase
           .from(TABLES.PROFILES)
           .update({ last_online: new Date().toISOString() })
-          .eq('id', data.user.id);
+          .eq('id', result.data.user.id);
         
         if (profileError) {
           console.error('Error updating last online status:', profileError);
         }
       }
       
-      return data;
+      return result;
     } catch (error) {
       console.error("Error in signIn:", error);
       throw error;
@@ -573,14 +619,14 @@ export const authService = {
   async signOut() {
     try {
       // Get current user before signing out
-      const { data: userData } = await supabase.auth.getUser();
+      const userData = await supabase.auth.getUser();
       
       // Update last_online before signing out
-      if (userData?.user) {
+      if (userData.data.user) {
         const { error: profileError } = await supabase
           .from(TABLES.PROFILES)
           .update({ last_online: new Date().toISOString() })
-          .eq('id', userData.user.id);
+          .eq('id', userData.data.user.id);
         
         if (profileError) {
           console.error('Error updating last online status:', profileError);

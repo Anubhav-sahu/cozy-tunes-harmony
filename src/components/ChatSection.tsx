@@ -3,7 +3,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, X, Trash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatMessage } from '@/lib/types';
-import ChatBubble from './ChatBubble';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,6 +15,35 @@ interface ChatSectionProps {
   onToggle: () => void;
   unreadCount: number;
 }
+
+// Individual chat bubble component
+const ChatBubble: React.FC<{
+  text: string;
+  sender: "me" | "partner";
+  timestamp: number;
+}> = ({ text, sender, timestamp }) => {
+  // Format timestamp
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  
+  return (
+    <div
+      className={cn(
+        "max-w-[80%] mb-2 p-2 rounded-lg",
+        sender === 'me'
+          ? "bg-blue-500/80 ml-auto rounded-br-none"
+          : "bg-white/10 rounded-bl-none"
+      )}
+    >
+      <p className="text-white text-sm">{text}</p>
+      <p className="text-right text-white/60 text-xs mt-1">
+        {formatTime(timestamp)}
+      </p>
+    </div>
+  );
+};
 
 const ChatSection: React.FC<ChatSectionProps> = ({
   messages,
@@ -110,7 +138,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                   {messages.map((message) => (
                     <ChatBubble
                       key={message.id}
-                      message={message.text}
+                      text={message.text}
                       sender={message.sender}
                       timestamp={message.timestamp}
                     />

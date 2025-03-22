@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useSongSync } from '@/hooks/useSongSync';
@@ -48,7 +47,8 @@ const Index = () => {
   const {
     syncState,
     toggleSync,
-    shareSyncLink
+    shareSyncLink,
+    connectToRoom
   } = useSongSync(
     songs,
     currentSongIndex,
@@ -77,7 +77,6 @@ const Index = () => {
   
   const currentSong = getCurrentSong();
   
-  // Load songs from Supabase when authenticated
   useEffect(() => {
     if (user) {
       const loadSongs = async () => {
@@ -97,7 +96,17 @@ const Index = () => {
     }
   }, [user]);
   
-  // Show notifications for new messages
+  useEffect(() => {
+    if (user) {
+      const savedRoomId = localStorage.getItem('syncRoomId');
+      if (savedRoomId) {
+        connectToRoom(savedRoomId);
+        localStorage.removeItem('syncRoomId');
+        toast.success('Joined music room successfully!');
+      }
+    }
+  }, [user]);
+  
   useEffect(() => {
     const handleNewMessage = (message) => {
       if (message.sender === 'partner') {
@@ -118,7 +127,6 @@ const Index = () => {
     setBackgroundImage(url);
     
     if (user && url) {
-      // In a real implementation, we would save the user's background preference
       localStorage.setItem('background_image', url);
     } else if (!url) {
       localStorage.removeItem('background_image');
@@ -135,7 +143,6 @@ const Index = () => {
     localStorage.setItem('background_darkness', value.toString());
   };
   
-  // If still loading auth state, show loading spinner
   if (loading) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#1a1a2e] to-[#16213e]">
@@ -144,7 +151,6 @@ const Index = () => {
     );
   }
   
-  // If in fullscreen background mode, only show minimal UI
   if (viewState.isFullscreenBackground) {
     return (
       <AppLayout
@@ -164,7 +170,6 @@ const Index = () => {
     );
   }
   
-  // If not authenticated, show auth page
   if (!user) {
     return (
       <AppLayout
@@ -179,7 +184,6 @@ const Index = () => {
     );
   }
   
-  // Main music interface
   return (
     <AppLayout
       backgroundImage={backgroundImage}
@@ -215,6 +219,7 @@ const Index = () => {
         toggleFavorite={toggleFavorite}
         toggleSync={toggleSync}
         shareSyncLink={shareSyncLink}
+        connectToRoom={connectToRoom}
         sendMessage={sendMessage}
         clearChat={clearChat}
         toggleFullscreenBackground={toggleFullscreenBackground}

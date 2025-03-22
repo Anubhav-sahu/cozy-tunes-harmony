@@ -23,18 +23,14 @@ export const useSongSync = (
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { user } = useAuth();
   
-  // Simulate connection with partner
-  const connectWithPartner = async () => {
+  // Connect to a specific room
+  const connectToRoom = async (roomId: string) => {
     if (!user) {
       toast.error('Please sign in to use the sync feature');
-      return null;
+      return;
     }
     
     try {
-      // Create a new sync room in the database
-      const room = await syncService.createSyncRoom(user.id);
-      const roomId = room.id;
-      
       setSyncState(prev => ({
         ...prev,
         isConnected: true,
@@ -42,14 +38,14 @@ export const useSongSync = (
         isSyncing: true,
       }));
       
-      // Check for partner online status (simulated for now)
+      // Simulate partner connection
       setTimeout(() => {
         setSyncState(prev => ({
           ...prev,
           partnerOnline: true,
         }));
         toast.success('Connected with partner! You can now sync music.');
-      }, 1500);
+      }, 1000);
       
       // Start sync interval
       if (syncIntervalRef.current) {
@@ -64,8 +60,8 @@ export const useSongSync = (
       
       return roomId;
     } catch (error) {
-      console.error('Failed to create sync room:', error);
-      toast.error('Failed to create sync room');
+      console.error('Failed to connect to room:', error);
+      toast.error('Failed to connect to room');
       return null;
     }
   };
@@ -106,7 +102,7 @@ export const useSongSync = (
         toast.info('Music syncing paused');
       }
     } else {
-      connectWithPartner();
+      toast.info('Please select a connection first');
     }
   };
   
@@ -122,7 +118,7 @@ export const useSongSync = (
         isMuted: playbackState.isMuted,
         isShuffled: playbackState.isShuffled,
         isRepeating: playbackState.isRepeating,
-        currentSongIndex: currentSongIndex, // Use the parameter instead of accessing it from playbackState
+        currentSongIndex, // Use the parameter
       });
     } catch (error) {
       console.error('Failed to sync playback state:', error);
@@ -172,7 +168,10 @@ export const useSongSync = (
   
   // Share the current sync link
   const shareSyncLink = () => {
-    if (!syncState.roomId) return;
+    if (!syncState.roomId) {
+      toast.error('No active connection to share');
+      return;
+    }
     
     // Create a join link
     const syncLink = `${window.location.origin}/join/${syncState.roomId}`;
@@ -188,7 +187,7 @@ export const useSongSync = (
   
   return {
     syncState,
-    connectWithPartner,
+    connectToRoom,
     disconnectFromPartner,
     toggleSync,
     shareSyncLink,

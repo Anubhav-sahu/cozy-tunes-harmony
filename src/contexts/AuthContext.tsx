@@ -46,8 +46,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      const { user } = await authService.signIn(email, password);
-      setUser(user);
+      const { data } = await authService.signIn(email, password);
+      setUser(data?.user || null);
       toast.success('Signed in successfully');
     } catch (error: any) {
       toast.error(error.message || 'Failed to sign in');

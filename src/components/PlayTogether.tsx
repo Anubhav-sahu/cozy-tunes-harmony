@@ -4,17 +4,20 @@ import { Users, Link, CheckCircle, XCircle, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SyncState } from '@/lib/types';
 import { toast } from 'sonner';
+import ConnectionManager from './ConnectionManager';
 
 interface PlayTogetherProps {
   syncState: SyncState;
   onToggleSync: () => void;
   onShareLink: () => void;
+  onSelectConnection: (roomId: string) => void;
 }
 
 const PlayTogether: React.FC<PlayTogetherProps> = ({
   syncState,
   onToggleSync,
-  onShareLink
+  onShareLink,
+  onSelectConnection
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -58,55 +61,52 @@ const PlayTogether: React.FC<PlayTogetherProps> = ({
       
       {isExpanded && (
         <div className="mt-4 animate-fade-in">
-          <p className="text-white/70 text-sm mb-4">
-            Sync your music with a friend and listen together in real-time.
-          </p>
-          
-          <div className="flex flex-col gap-2">
-            <button
-              className={cn(
-                "glass-button px-4 py-2 flex items-center justify-center",
-                syncState.isSyncing ? "bg-blue-500/30 text-white" : ""
-              )}
-              onClick={onToggleSync}
-            >
-              {syncState.isConnected ? (
-                syncState.isSyncing ? (
-                  <>
-                    <CheckCircle size={18} className="mr-2" />
-                    Syncing
-                  </>
-                ) : (
-                  <>
-                    <XCircle size={18} className="mr-2" />
-                    Resume Sync
-                  </>
-                )
-              ) : (
-                <>
-                  <Users size={18} className="mr-2" />
-                  Connect & Sync
-                </>
-              )}
-            </button>
-            
-            {syncState.isConnected && (
-              <button
-                className="glass-button px-4 py-2 flex items-center justify-center"
-                onClick={onShareLink}
-              >
-                <Link size={18} className="mr-2" />
-                Share Link
-              </button>
-            )}
-          </div>
-          
-          {syncState.isConnected && syncState.isSyncing && (
-            <div className="mt-4 p-3 bg-white/10 rounded-lg border border-white/20">
-              <p className="text-white/90 text-sm">
-                <span className="font-medium">Syncing active!</span> When you change songs or pause/play, your partner will experience the same.
+          {!syncState.isConnected ? (
+            <ConnectionManager onSelectConnection={onSelectConnection} />
+          ) : (
+            <>
+              <p className="text-white/70 text-sm mb-4">
+                Sync your music with a friend and listen together in real-time.
               </p>
-            </div>
+              
+              <div className="flex flex-col gap-2">
+                <button
+                  className={cn(
+                    "glass-button px-4 py-2 flex items-center justify-center",
+                    syncState.isSyncing ? "bg-blue-500/30 text-white" : ""
+                  )}
+                  onClick={onToggleSync}
+                >
+                  {syncState.isSyncing ? (
+                    <>
+                      <CheckCircle size={18} className="mr-2" />
+                      Syncing
+                    </>
+                  ) : (
+                    <>
+                      <XCircle size={18} className="mr-2" />
+                      Resume Sync
+                    </>
+                  )}
+                </button>
+                
+                <button
+                  className="glass-button px-4 py-2 flex items-center justify-center"
+                  onClick={onShareLink}
+                >
+                  <Link size={18} className="mr-2" />
+                  Share Link
+                </button>
+              </div>
+              
+              {syncState.isSyncing && (
+                <div className="mt-4 p-3 bg-white/10 rounded-lg border border-white/20">
+                  <p className="text-white/90 text-sm">
+                    <span className="font-medium">Syncing active!</span> When you change songs or pause/play, your partner will experience the same.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Song, ChatMessage, ViewState, PlaybackState } from './types';
 
@@ -14,17 +13,28 @@ const createSupabaseClient = () => {
     // Return a mock client for development
     return {
       from: () => ({
-        select: () => ({ data: [], error: null }),
+        select: () => {
+          const response = { data: [], error: null };
+          response.order = () => response;
+          response.eq = () => response;
+          return response;
+        },
         insert: () => ({ error: null }),
-        update: () => ({ error: null }),
-        delete: () => ({ error: null }),
-        eq: () => ({ data: [], error: null }),
-        order: () => ({ data: [], error: null }),
+        update: () => {
+          const response = { error: null };
+          response.eq = () => response;
+          return response;
+        },
+        delete: () => {
+          const response = { error: null };
+          response.eq = () => response;
+          return response;
+        },
         upsert: () => ({ error: null }),
       }),
       auth: {
-        signUp: () => ({ data: {}, error: null }),
-        signInWithPassword: () => ({ data: {}, error: null }),
+        signUp: () => ({ data: { user: null }, error: null }),
+        signInWithPassword: () => ({ data: { user: null, session: null }, error: null }),
         signOut: () => ({ error: null }),
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } }, error: null }),
         getUser: () => ({ data: { user: null }, error: null }),
@@ -36,8 +46,13 @@ const createSupabaseClient = () => {
           getPublicUrl: () => ({ data: { publicUrl: '' } }),
         }),
       },
-      channel: () => ({
-        on: () => ({ subscribe: () => ({ unsubscribe: () => {} }) }),
+      channel: (name) => ({
+        on: (type, config, callback) => {
+          // Mock return for channel subscription
+          return {
+            subscribe: () => ({ unsubscribe: () => {} })
+          };
+        },
         subscribe: () => ({ unsubscribe: () => {} }),
       }),
     };
@@ -60,6 +75,7 @@ export const TABLES = {
   SYNC_ROOMS: 'sync_rooms',
   PLAYBACK_STATE: 'playback_state',
   VIEW_STATE: 'view_state',
+  USER_CONNECTIONS: 'user_connections', // New table for managing user connections
 };
 
 // Song-related functions
@@ -67,15 +83,19 @@ export const songService = {
   async getSongs() {
     const { data, error } = await supabase
       .from(TABLES.SONGS)
-      .select('*')
-      .order('addedAt', { ascending: false });
+      .select('*');
     
     if (error) {
       console.error('Error fetching songs:', error);
       return [];
     }
     
-    return data as Song[];
+    // Sort the data in JavaScript instead of using .order()
+    return (data as Song[]).sort((a, b) => {
+      const dateA = a.addedAt || 0;
+      const dateB = b.addedAt || 0;
+      return dateB - dateA; // Sort descending (newest first)
+    });
   },
   
   async addSong(song: Song) {
@@ -131,16 +151,17 @@ export const chatService = {
   async getMessages(roomId: string) {
     const { data, error } = await supabase
       .from(TABLES.CHAT_MESSAGES)
-      .select('*')
-      .eq('roomId', roomId)
-      .order('timestamp', { ascending: true });
+      .select('*');
     
     if (error) {
       console.error('Error fetching messages:', error);
       return [];
     }
     
-    return data as ChatMessage[];
+    // Filter and sort in JavaScript
+    return (data as ChatMessage[])
+      .filter(msg => msg.roomId === roomId)
+      .sort((a, b) => a.timestamp - b.timestamp);
   },
   
   async sendMessage(message: ChatMessage) {
@@ -167,17 +188,90 @@ export const chatService = {
   },
   
   subscribeToMessages(roomId: string, callback: (message: ChatMessage) => void) {
-    return supabase
-      .channel(`chat-${roomId}`)
-      .on('postgres_changes', {
+    // Use Supabase channel for real-time updates
+    const channel = supabase.channel(`chat-${roomId}`);
+    
+    // Subscribe to all insert events on the chat_messages table for this room
+    channel.on(
+      'postgres_changes',
+      {
         event: 'INSERT',
         schema: 'public',
         table: TABLES.CHAT_MESSAGES,
         filter: `roomId=eq.${roomId}`
-      }, (payload) => {
+      },
+      (payload) => {
         callback(payload.new as ChatMessage);
-      })
-      .subscribe();
+      }
+    );
+    
+    return channel.subscribe();
+  }
+};
+
+// Connection-related functions (new service)
+export const connectionService = {
+  async createConnection(userId: string, partnerEmail: string) {
+    // First check if the partner email exists in the system
+    const { data: userCheck, error: userError } = await supabase
+      .from('auth.users')  // This may need to be adjusted based on your Supabase schema
+      .select('id')
+      .eq('email', partnerEmail);
+    
+    if (userError || !userCheck || userCheck.length === 0) {
+      console.error('User not found:', userError || 'No user with that email');
+      throw new Error('User not found with that email');
+    }
+    
+    const partnerId = userCheck[0].id;
+    
+    // Create a sync room for the connection
+    const { data: room, error: roomError } = await supabase
+      .from(TABLES.SYNC_ROOMS)
+      .insert([{ 
+        ownerId: userId,
+        partnerId: partnerId,
+        createdAt: new Date().toISOString(),
+        lastActivity: new Date().toISOString()
+      }])
+      .select();
+    
+    if (roomError) {
+      console.error('Error creating sync room:', roomError);
+      throw roomError;
+    }
+    
+    return room[0];
+  },
+  
+  async getActiveConnections(userId: string) {
+    // Get rooms where the user is either owner or partner
+    const { data, error } = await supabase
+      .from(TABLES.SYNC_ROOMS)
+      .select('*')
+      .or(`ownerId.eq.${userId},partnerId.eq.${userId}`);
+    
+    if (error) {
+      console.error('Error fetching connections:', error);
+      return [];
+    }
+    
+    return data;
+  },
+  
+  async getUserInfo(userId: string) {
+    const { data, error } = await supabase
+      .from('profiles') // Assuming you have a profiles table
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching user info:', error);
+      return null;
+    }
+    
+    return data;
   }
 };
 
@@ -232,31 +326,41 @@ export const syncService = {
   },
   
   subscribeToPlaybackState(roomId: string, callback: (state: PlaybackState) => void) {
-    return supabase
-      .channel(`playback-${roomId}`)
-      .on('postgres_changes', {
+    const channel = supabase.channel(`playback-${roomId}`);
+    
+    channel.on(
+      'postgres_changes',
+      {
         event: '*',
         schema: 'public',
         table: TABLES.PLAYBACK_STATE,
         filter: `roomId=eq.${roomId}`
-      }, (payload) => {
+      },
+      (payload) => {
         callback(payload.new as PlaybackState);
-      })
-      .subscribe();
+      }
+    );
+    
+    return channel.subscribe();
   },
   
   subscribeToViewState(roomId: string, callback: (state: ViewState) => void) {
-    return supabase
-      .channel(`view-${roomId}`)
-      .on('postgres_changes', {
+    const channel = supabase.channel(`view-${roomId}`);
+    
+    channel.on(
+      'postgres_changes',
+      {
         event: '*',
         schema: 'public',
         table: TABLES.VIEW_STATE,
         filter: `roomId=eq.${roomId}`
-      }, (payload) => {
+      },
+      (payload) => {
         callback(payload.new as ViewState);
-      })
-      .subscribe();
+      }
+    );
+    
+    return channel.subscribe();
   }
 };
 

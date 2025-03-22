@@ -36,6 +36,7 @@ interface MusicInterfaceProps {
   toggleFavorite: (id: string) => void;
   toggleSync: () => void;
   shareSyncLink: () => void;
+  connectToRoom: (roomId: string) => void;
   sendMessage: (text: string) => void;
   clearChat: () => void;
   toggleFullscreenBackground: () => void;
@@ -71,6 +72,7 @@ const MusicInterface: React.FC<MusicInterfaceProps> = ({
   toggleFavorite,
   toggleSync,
   shareSyncLink,
+  connectToRoom,
   sendMessage,
   clearChat,
   toggleFullscreenBackground,
@@ -139,9 +141,9 @@ const MusicInterface: React.FC<MusicInterfaceProps> = ({
             songs={songs}
             currentSongIndex={currentSongIndex}
             isPlaying={playbackState.isPlaying}
-            onSelectSong={handleSelectSong}
-            onRemoveSong={handleRemoveSong}
-            onToggleFavorite={handleSongFavorite}
+            onSelectSong={selectSong}
+            onRemoveSong={removeSong}
+            onToggleFavorite={toggleFavorite}
           />
           
           {/* Upload Button */}
@@ -156,6 +158,7 @@ const MusicInterface: React.FC<MusicInterfaceProps> = ({
             syncState={syncState}
             onToggleSync={toggleSync}
             onShareLink={shareSyncLink}
+            onSelectConnection={connectToRoom}
           />
           
           {/* Background Customization */}

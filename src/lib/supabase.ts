@@ -4,8 +4,8 @@ import { Song, ChatMessage, ViewState, PlaybackState } from './types';
 
 // Get environment variables or use fallback values
 // In production, these should be real values
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project-id.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ihwgjwjduubefnvqawte.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlod2dqd2pkdXViZWZudnFhd3RlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2ODE3OTcsImV4cCI6MjA1ODI1Nzc5N30.uASFz3ApaWWMzyfax6hwDK7qYqQAC0rZLGhwYC_Y020';
 
 // Create the Supabase client only if we have valid URL
 const createSupabaseClient = () => {

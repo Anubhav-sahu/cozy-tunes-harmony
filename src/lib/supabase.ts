@@ -181,13 +181,18 @@ export const chatService = {
   
   async sendMessage(message: ChatMessage) {
     const userData = await supabase.auth.getUser();
+    const userId = userData.data.user?.id;
+    
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
     
     const { error } = await supabase
       .from(TABLES.CHAT_MESSAGES)
       .insert([{
         room_id: message.roomId,
         text: message.text,
-        sender_id: userData.data.user?.id,
+        sender_id: userId,
         timestamp: new Date().toISOString(),
         is_read: false
       }]);
@@ -249,7 +254,7 @@ export const connectionService = {
       const { data, error } = await supabase
         .from(TABLES.PROFILES)
         .select('id')
-        .eq('email', email);
+        .eq('email', email.toLowerCase().trim());
       
       if (error) {
         console.error('Error checking user:', error);
@@ -265,6 +270,8 @@ export const connectionService = {
   
   async createConnection(userId: string, partnerEmail: string) {
     try {
+      partnerEmail = partnerEmail.toLowerCase().trim();
+      
       // First check if the partner email exists in the system
       const { data: userCheck, error: userError } = await supabase
         .from(TABLES.PROFILES)
@@ -335,8 +342,8 @@ export const connectionService = {
           active, 
           owner_id, 
           partner_id, 
-          profiles!owner_id(email, display_name),
-          profiles!partner_id(email, display_name)
+          profiles!sync_rooms_owner_id_fkey(email, display_name),
+          profiles!sync_rooms_partner_id_fkey(email, display_name)
         `)
         .or(`owner_id.eq.${userId},partner_id.eq.${userId}`)
         .eq('active', true);
@@ -355,14 +362,10 @@ export const connectionService = {
         const isOwner = conn.owner_id === userId;
         const partnerId = isOwner ? conn.partner_id : conn.owner_id;
         
-        // Access profile data with appropriate typecasting
-        const ownerProfile = conn.profiles as any;
-        const ownerData = ownerProfile.owner_id as {email?: string, display_name?: string};
+        const ownerProfile = (conn.profiles as any)['sync_rooms_owner_id_fkey'] as Record<string, any>;
+        const partnerProfile = (conn.profiles as any)['sync_rooms_partner_id_fkey'] as Record<string, any>;
         
-        const partnerProfile = conn.profiles as any;
-        const partnerData = partnerProfile.partner_id as {email?: string, display_name?: string};
-        
-        const partnerInfo = isOwner ? partnerData : ownerData;
+        const partnerInfo = isOwner ? partnerProfile : ownerProfile;
         
         return {
           id: conn.id,
@@ -486,18 +489,18 @@ export const syncService = {
           filter: `room_id=eq.${roomId}`
         },
         (payload) => {
-          // If payload.new is undefined or null, use empty object with proper type casting
+          // Type-safe handling for payload.new
           const rawState = (payload.new || {}) as Record<string, any>;
           
-          // Map from DB schema to our app's expected format with proper null/undefined handling
+          // Map from DB schema to app format with safe access
           const playbackState: PlaybackState = {
-            isPlaying: Boolean(rawState.is_playing),
-            currentTime: Number(rawState.current_position || 0),
-            duration: Number(rawState.duration_value || 0),
-            volume: Number(rawState.volume || 1),
-            isMuted: Boolean(rawState.is_muted),
-            isShuffled: Boolean(rawState.is_shuffled),
-            isRepeating: Boolean(rawState.is_repeating),
+            isPlaying: Boolean(rawState.is_playing ?? false),
+            currentTime: Number(rawState.current_position ?? 0),
+            duration: Number(rawState.duration_value ?? 0),
+            volume: Number(rawState.volume ?? 1),
+            isMuted: Boolean(rawState.is_muted ?? false),
+            isShuffled: Boolean(rawState.is_shuffled ?? false),
+            isRepeating: Boolean(rawState.is_repeating ?? false),
             currentSongIndex: typeof rawState.current_song_index === 'number' ? rawState.current_song_index : undefined
           };
           
@@ -526,12 +529,12 @@ export const syncService = {
           filter: `room_id=eq.${roomId}`
         },
         (payload) => {
-          // Cast to Record<string, any> to safely access properties
+          // Type-safe handling for payload.new
           const rawState = (payload.new || {}) as Record<string, any>;
           
-          // Map from DB schema to our app's expected format
+          // Map from DB schema to app format with safe access
           const viewState: ViewState = {
-            isFullscreenBackground: Boolean(rawState.is_fullscreen_background)
+            isFullscreenBackground: Boolean(rawState.is_fullscreen_background ?? false)
           };
           
           callback(viewState);
@@ -551,6 +554,8 @@ export const syncService = {
 export const authService = {
   async signUp(email: string, password: string) {
     try {
+      email = email.toLowerCase().trim();
+      
       // Sign up the user
       const result = await supabase.auth.signUp({
         email,
@@ -589,6 +594,8 @@ export const authService = {
   
   async signIn(email: string, password: string) {
     try {
+      email = email.toLowerCase().trim();
+      
       const result = await supabase.auth.signInWithPassword({
         email,
         password,

@@ -85,13 +85,11 @@ const Index = () => {
       const loadSongs = async () => {
         try {
           const songsData = await songService.getSongs();
-          songsData.forEach(song => {
-            // Convert to Song type by omitting user_id
-            const { user_id, ...songData } = song;
-            addSong(songData as unknown as Song);
-          });
-          
           if (songsData.length > 0) {
+            songsData.forEach(song => {
+              addSong(song as Song);
+            });
+            
             toast.success('Loaded your saved songs');
           }
         } catch (error) {
@@ -102,7 +100,6 @@ const Index = () => {
       
       loadSongs();
       
-      // Load background preferences
       const savedBackground = localStorage.getItem('background_image');
       if (savedBackground) {
         setBackgroundImage(savedBackground);
@@ -170,20 +167,29 @@ const Index = () => {
     localStorage.setItem('background_darkness', value.toString());
   };
   
-  const handleSongUpload = (song: Song) => {
+  const handleSongUpload = async (song: Song) => {
     if (user) {
-      // Add the song locally
-      addSong({
-        ...song,
-        addedAt: Date.now()
-      });
-      
-      // If connected with a partner, notify them
-      if (syncState.isConnected && syncState.partnerOnline) {
-        toast.success("Song added and shared with your partner");
+      try {
+        const songWithUser = {
+          ...song,
+          addedAt: Date.now(),
+          user_id: user.id
+        };
+        
+        addSong(songWithUser);
+        
+        if (song.src.startsWith('blob:')) {
+          await songService.addSong(songWithUser as any);
+        }
+        
+        if (syncState.isConnected && syncState.partnerOnline) {
+          toast.success("Song added and shared with your partner");
+        }
+      } catch (error) {
+        console.error('Error saving song:', error);
+        toast.error('Failed to save song');
       }
     } else {
-      // Just add the song locally if not logged in
       addSong(song);
     }
   };

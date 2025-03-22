@@ -72,14 +72,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
       setIsLoading(true);
       setError('');
       
-      // Validate that the email exists in the system
-      const emailExists = await connectionService.checkUserExists(partnerEmail);
-      
-      if (!emailExists) {
-        setError(`User with email ${partnerEmail} not found. Make sure they have registered.`);
-        return;
-      }
-      
+      // Create the connection directly - the service will handle validation
       const connection = await connectionService.createConnection(user.id, partnerEmail);
       toast.success(`Connection with ${partnerEmail} created!`);
       setPartnerEmail('');
@@ -145,7 +138,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
                     id="partnerEmail"
                     type="email"
                     value={partnerEmail}
-                    onChange={(e) => setPartnerEmail(e.target.value.trim())}
+                    onChange={(e) => setPartnerEmail(e.target.value)}
                     placeholder="Enter their email address"
                     className="bg-white/10 border-white/20"
                     required

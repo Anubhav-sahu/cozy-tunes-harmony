@@ -2,11 +2,56 @@
 import { createClient } from '@supabase/supabase-js';
 import { Song, ChatMessage, ViewState, PlaybackState } from './types';
 
-// These should be replaced with your own Supabase project details
-const supabaseUrl = 'YOUR_SUPABASE_URL';
-const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+// Get environment variables or use fallback values
+// In production, these should be real values
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project-id.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create the Supabase client only if we have valid URL
+const createSupabaseClient = () => {
+  if (!supabaseUrl.includes('https://') || supabaseUrl.includes('your-project-id')) {
+    console.warn('Invalid Supabase URL. Please set correct environment variables.');
+    // Return a mock client for development
+    return {
+      from: () => ({
+        select: () => ({ data: [], error: null }),
+        insert: () => ({ error: null }),
+        update: () => ({ error: null }),
+        delete: () => ({ error: null }),
+        eq: () => ({ data: [], error: null }),
+        order: () => ({ data: [], error: null }),
+        upsert: () => ({ error: null }),
+      }),
+      auth: {
+        signUp: () => ({ data: {}, error: null }),
+        signInWithPassword: () => ({ data: {}, error: null }),
+        signOut: () => ({ error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } }, error: null }),
+        getUser: () => ({ data: { user: null }, error: null }),
+        getSession: () => ({ data: { session: null }, error: null }),
+      },
+      storage: {
+        from: () => ({
+          upload: () => ({ data: {}, error: null }),
+          getPublicUrl: () => ({ data: { publicUrl: '' } }),
+        }),
+      },
+      channel: () => ({
+        on: () => ({ subscribe: () => ({ unsubscribe: () => {} }) }),
+        subscribe: () => ({ unsubscribe: () => {} }),
+      }),
+    };
+  }
+  
+  try {
+    return createClient(supabaseUrl, supabaseAnonKey);
+  } catch (error) {
+    console.error('Error creating Supabase client:', error);
+    throw error;
+  }
+};
+
+export const supabase = createSupabaseClient();
 
 // Database schema names
 export const TABLES = {

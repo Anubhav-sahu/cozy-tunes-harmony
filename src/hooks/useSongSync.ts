@@ -27,7 +27,7 @@ export const useSongSync = (
   const connectToRoom = async (roomId: string) => {
     if (!user) {
       toast.error('Please sign in to use the sync feature');
-      return;
+      return null;
     }
     
     try {
@@ -37,6 +37,9 @@ export const useSongSync = (
         roomId,
         isSyncing: true,
       }));
+      
+      // Save to localStorage for reconnection after page refresh
+      localStorage.setItem('syncRoomId', roomId);
       
       // Simulate partner connection
       setTimeout(() => {
@@ -78,6 +81,9 @@ export const useSongSync = (
       roomId: null,
       isSyncing: false,
     });
+    
+    // Remove from localStorage
+    localStorage.removeItem('syncRoomId');
     
     toast.info('Disconnected from partner');
   };

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Users, Link, CheckCircle, XCircle, Share2 } from 'lucide-react';
+import { Users, Link, CheckCircle, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SyncState } from '@/lib/types';
 import { toast } from 'sonner';
@@ -20,6 +20,12 @@ const PlayTogether: React.FC<PlayTogetherProps> = ({
   onSelectConnection
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  
+  const handleSelectConnection = (roomId: string) => {
+    onSelectConnection(roomId);
+    // Close the panel after selecting a connection
+    setIsExpanded(false);
+  };
   
   return (
     <div className="glass-panel p-4">
@@ -62,7 +68,7 @@ const PlayTogether: React.FC<PlayTogetherProps> = ({
       {isExpanded && (
         <div className="mt-4 animate-fade-in">
           {!syncState.isConnected ? (
-            <ConnectionManager onSelectConnection={onSelectConnection} />
+            <ConnectionManager onSelectConnection={handleSelectConnection} />
           ) : (
             <>
               <p className="text-white/70 text-sm mb-4">

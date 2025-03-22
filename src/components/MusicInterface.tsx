@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import MusicPlayer from '@/components/MusicPlayer';
 import SongList from '@/components/SongList';
 import UploadSong from '@/components/UploadSong';
@@ -43,6 +43,8 @@ interface MusicInterfaceProps {
   onBackgroundChange: (url: string | null) => void;
   onBlurChange: (value: number) => void;
   onDarknessChange: (value: number) => void;
+  unreadCount?: number;
+  markAllAsRead?: () => void;
 }
 
 const MusicInterface: React.FC<MusicInterfaceProps> = ({
@@ -78,9 +80,12 @@ const MusicInterface: React.FC<MusicInterfaceProps> = ({
   toggleFullscreenBackground,
   onBackgroundChange,
   onBlurChange,
-  onDarknessChange
+  onDarknessChange,
+  unreadCount = 0,
+  markAllAsRead = () => {}
 }) => {
   const currentSong = getCurrentSong();
+  const [isChatOpen, setIsChatOpen] = useState(false);
   
   const handleToggleFavorite = async () => {
     if (currentSong) {
@@ -88,16 +93,11 @@ const MusicInterface: React.FC<MusicInterfaceProps> = ({
     }
   };
   
-  const handleSelectSong = (index: number) => {
-    selectSong(index);
-  };
-  
-  const handleRemoveSong = async (id: string) => {
-    removeSong(id);
-  };
-  
-  const handleSongFavorite = async (id: string) => {
-    toggleFavorite(id);
+  const handleToggleChat = () => {
+    setIsChatOpen(prev => !prev);
+    if (!isChatOpen && markAllAsRead) {
+      markAllAsRead();
+    }
   };
   
   return (
@@ -122,7 +122,7 @@ const MusicInterface: React.FC<MusicInterfaceProps> = ({
             isMuted={playbackState.isMuted}
             volume={playbackState.volume}
             isSyncing={syncState.isSyncing}
-            unreadMessages={0}
+            unreadMessages={unreadCount}
             onTogglePlay={togglePlay}
             onSeek={seek}
             onPrevious={playPrevious}
@@ -133,7 +133,7 @@ const MusicInterface: React.FC<MusicInterfaceProps> = ({
             onVolumeChange={setVolume}
             onToggleFavorite={handleToggleFavorite}
             onToggleSync={toggleSync}
-            onToggleChat={() => {}}
+            onToggleChat={handleToggleChat}
           />
           
           {/* Song List */}
@@ -178,6 +178,9 @@ const MusicInterface: React.FC<MusicInterfaceProps> = ({
               messages={messages}
               onSendMessage={sendMessage}
               onClearChat={clearChat}
+              isOpen={isChatOpen}
+              onToggle={handleToggleChat}
+              unreadCount={unreadCount}
             />
           </div>
         </div>

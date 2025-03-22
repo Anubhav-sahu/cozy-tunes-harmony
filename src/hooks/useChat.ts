@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export const useChat = (syncRoomId: string | null) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user } = useAuth();
 
   // Load initial messages
@@ -54,6 +55,12 @@ export const useChat = (syncRoomId: string | null) => {
         if (prev.some(msg => msg.id === newMessage.id)) {
           return prev;
         }
+        
+        // If new message is from partner, increment unread count
+        if (newMessage.sender === 'partner') {
+          setUnreadCount(count => count + 1);
+        }
+        
         return [...prev, newMessage];
       });
       
@@ -98,16 +105,23 @@ export const useChat = (syncRoomId: string | null) => {
     try {
       await chatService.clearChat(syncRoomId);
       setMessages([]);
+      setUnreadCount(0);
       toast.success('Chat cleared');
     } catch (error) {
       console.error('Failed to clear chat:', error);
       toast.error('Failed to clear chat');
     }
   };
+  
+  const markAllAsRead = () => {
+    setUnreadCount(0);
+  };
 
   return {
     messages,
+    unreadCount,
     sendMessage,
     clearChat,
+    markAllAsRead
   };
 };

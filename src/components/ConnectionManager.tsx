@@ -14,12 +14,11 @@ interface ConnectionManagerProps {
 
 interface ConnectionInfo {
   id: string;
-  ownerId: string;
   partnerId: string;
+  partnerName: string;
   createdAt: string;
   lastActivity: string;
-  ownerName?: string;
-  partnerName?: string;
+  active: boolean;
 }
 
 const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnection }) => {
@@ -37,22 +36,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
     try {
       setIsLoadingConnections(true);
       const connectionsData = await connectionService.getActiveConnections(user.id);
-      
-      // Enhance connection data with user information
-      const enhancedConnections = await Promise.all(
-        connectionsData.map(async (conn) => {
-          // Only fetch partner info if it's not the current user
-          const partnerId = conn.ownerId === user.id ? conn.partnerId : conn.ownerId;
-          const partnerInfo = await connectionService.getUserInfo(partnerId);
-          
-          return {
-            ...conn,
-            partnerName: partnerInfo?.name || partnerInfo?.email || 'Unknown User'
-          };
-        })
-      );
-      
-      setConnections(enhancedConnections);
+      setConnections(connectionsData);
     } catch (error) {
       console.error('Failed to load connections:', error);
       toast.error('Failed to load your connections');
@@ -62,7 +46,9 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
   };
   
   useEffect(() => {
-    loadConnections();
+    if (user) {
+      loadConnections();
+    }
   }, [user]);
   
   const handleCreateConnection = async (e: React.FormEvent) => {

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useSongSync } from '@/hooks/useSongSync';
@@ -66,8 +67,10 @@ const Index = () => {
   
   const {
     messages,
+    unreadCount,
     sendMessage,
-    clearChat
+    clearChat,
+    markAllAsRead
   } = useChat(syncState.roomId);
   
   const {
@@ -108,11 +111,14 @@ const Index = () => {
   }, [user]);
   
   useEffect(() => {
-    const handleNewMessage = (message) => {
+    const handleNewMessage = (message: any) => {
       if (message.sender === 'partner') {
         addNotification({
+          id: `msg_${Date.now()}`,
           message: `New message: ${message.text}`,
-          type: 'info'
+          type: 'info',
+          timestamp: Date.now(),
+          autoHide: true
         });
       }
     };
@@ -226,6 +232,8 @@ const Index = () => {
         onBackgroundChange={handleBackgroundChange}
         onBlurChange={handleBlurChange}
         onDarknessChange={handleDarknessChange}
+        unreadCount={unreadCount}
+        markAllAsRead={markAllAsRead}
       />
     </AppLayout>
   );

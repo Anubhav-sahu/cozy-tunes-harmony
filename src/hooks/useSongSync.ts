@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { SyncState, Song, PlaybackState } from '@/lib/types';
 import { toast } from 'sonner';
-import { syncService } from '@/lib/supabase';
+import { syncService, songService } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 export const useSongSync = (
@@ -11,7 +11,8 @@ export const useSongSync = (
   playbackState: PlaybackState,
   playSong: (index: number) => void,
   togglePlay: () => void,
-  seek: (time: number) => void
+  seek: (time: number) => void,
+  addSong: (song: Song) => void
 ) => {
   const [syncState, setSyncState] = useState<SyncState>({
     isConnected: false,
@@ -61,11 +62,37 @@ export const useSongSync = (
         }
       }, 1000); // Sync every second
       
+      // Load shared songs from partner
+      loadSharedSongs(roomId);
+      
       return roomId;
     } catch (error) {
       console.error('Failed to connect to room:', error);
       toast.error('Failed to connect to room');
       return null;
+    }
+  };
+  
+  // Load shared songs from the partner
+  const loadSharedSongs = async (roomId: string) => {
+    try {
+      const sharedSongs = await songService.getSharedSongs(roomId);
+      
+      // Filter out songs that are already in the local collection
+      const existingIds = new Set(songs.map(song => song.id));
+      const newSongs = sharedSongs.filter(song => !existingIds.has(song.id));
+      
+      if (newSongs.length > 0) {
+        // Add the partner's songs to local collection
+        for (const song of newSongs) {
+          addSong(song);
+        }
+        
+        toast.success(`Loaded ${newSongs.length} songs from your partner`);
+      }
+    } catch (error) {
+      console.error('Failed to load shared songs:', error);
+      toast.error('Failed to load shared songs');
     }
   };
   

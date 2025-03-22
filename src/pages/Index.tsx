@@ -6,7 +6,7 @@ import { useChat } from '@/hooks/useChat';
 import { useViewStateSync } from '@/hooks/useViewStateSync';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/contexts/AuthContext';
-import { ViewState } from '@/lib/types';
+import { ViewState, Notification } from '@/lib/types';
 import { songService } from '@/lib/supabase';
 import { toast } from 'sonner';
 import AppLayout from '@/components/AppLayout';
@@ -56,7 +56,8 @@ const Index = () => {
     playbackState,
     selectSong,
     togglePlay,
-    seek
+    seek,
+    addSong
   );
   
   const {
@@ -86,9 +87,15 @@ const Index = () => {
         try {
           const songsData = await songService.getSongs();
           songsData.forEach(song => {
-            addSong(song);
+            addSong({
+              ...song,
+              user_id: user.id // Ensure user_id is set for new songs
+            });
           });
-          toast.success('Loaded your saved songs');
+          
+          if (songsData.length > 0) {
+            toast.success('Loaded your saved songs');
+          }
         } catch (error) {
           console.error('Failed to load songs:', error);
           toast.error('Failed to load songs');
@@ -96,6 +103,22 @@ const Index = () => {
       };
       
       loadSongs();
+      
+      // Load background preferences
+      const savedBackground = localStorage.getItem('background_image');
+      if (savedBackground) {
+        setBackgroundImage(savedBackground);
+      }
+      
+      const savedBlur = localStorage.getItem('background_blur');
+      if (savedBlur) {
+        setBlurAmount(Number(savedBlur));
+      }
+      
+      const savedDarkness = localStorage.getItem('background_darkness');
+      if (savedDarkness) {
+        setDarknessAmount(Number(savedDarkness));
+      }
     }
   }, [user]);
   
@@ -104,28 +127,29 @@ const Index = () => {
       const savedRoomId = localStorage.getItem('syncRoomId');
       if (savedRoomId) {
         connectToRoom(savedRoomId);
-        localStorage.removeItem('syncRoomId');
         toast.success('Joined music room successfully!');
+      }
+      
+      const joinRoomId = sessionStorage.getItem('joinRoomAfterAuth');
+      if (joinRoomId) {
+        connectToRoom(joinRoomId);
+        sessionStorage.removeItem('joinRoomAfterAuth');
+        toast.success('Joined shared music room!');
       }
     }
   }, [user]);
   
   useEffect(() => {
-    const handleNewMessage = (message: any) => {
-      if (message.sender === 'partner') {
+    if (messages.length > 0) {
+      const latestMessage = messages[messages.length - 1];
+      if (latestMessage.sender === 'partner') {
         addNotification({
-          id: `msg_${Date.now()}`,
-          message: `New message: ${message.text}`,
           type: 'info',
+          message: `New message: ${latestMessage.text}`,
           timestamp: Date.now(),
           autoHide: true
         });
       }
-    };
-    
-    if (messages.length > 0) {
-      const latestMessage = messages[messages.length - 1];
-      handleNewMessage(latestMessage);
     }
   }, [messages.length]);
   
@@ -147,6 +171,28 @@ const Index = () => {
   const handleDarknessChange = (value: number) => {
     setDarknessAmount(value);
     localStorage.setItem('background_darkness', value.toString());
+  };
+  
+  const handleSongUpload = (song: Song) => {
+    if (user) {
+      // Add the user ID to the song
+      const songWithUser = {
+        ...song,
+        user_id: user.id,
+        addedAt: Date.now()
+      };
+      
+      // Add to local state and save to database
+      addSong(songWithUser);
+      
+      // If connected with a partner, notify them
+      if (syncState.isConnected && syncState.partnerOnline) {
+        toast.success("Song added and shared with your partner");
+      }
+    } else {
+      // Just add the song locally if not logged in
+      addSong(song);
+    }
   };
   
   if (loading) {
@@ -219,7 +265,7 @@ const Index = () => {
         toggleMute={toggleMute}
         toggleShuffle={toggleShuffle}
         toggleRepeat={toggleRepeat}
-        addSong={addSong}
+        addSong={handleSongUpload}
         removeSong={removeSong}
         selectSong={selectSong}
         toggleFavorite={toggleFavorite}

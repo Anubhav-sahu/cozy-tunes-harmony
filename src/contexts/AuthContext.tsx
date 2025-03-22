@@ -21,8 +21,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check for existing session
     const checkUser = async () => {
       try {
-        const { data } = await authService.getCurrentSession();
-        setUser(data.session?.user || null);
+        const { data: { session } } = await authService.getCurrentSession();
+        setUser(session?.user || null);
       } catch (error) {
         console.error('Error checking auth state:', error);
         setUser(null);
@@ -46,8 +46,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      const { data } = await authService.signIn(email, password);
-      setUser(data?.user || null);
+      const { data, error } = await authService.signIn(email, password);
+      if (error) throw error;
+      setUser(data.user || null);
       toast.success('Signed in successfully');
     } catch (error: any) {
       toast.error(error.message || 'Failed to sign in');

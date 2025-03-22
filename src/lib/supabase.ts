@@ -3,71 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 import { Song, ChatMessage, ViewState, PlaybackState } from './types';
 
 // Get environment variables or use fallback values
-// In production, these should be real values
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ihwgjwjduubefnvqawte.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlod2dqd2pkdXViZWZudnFhd3RlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2ODE3OTcsImV4cCI6MjA1ODI1Nzc5N30.uASFz3ApaWWMzyfax6hwDK7qYqQAC0rZLGhwYC_Y020';
 
-// Create the Supabase client only if we have valid URL
-const createSupabaseClient = () => {
-  if (!supabaseUrl.includes('https://') || supabaseUrl.includes('your-project-id')) {
-    console.warn('Invalid Supabase URL. Please set correct environment variables.');
-    // Return a mock client for development
-    return {
-      from: () => ({
-        select: () => {
-          const response = { data: [], error: null };
-          response.order = () => response;
-          response.eq = () => response;
-          return response;
-        },
-        insert: () => ({ error: null }),
-        update: () => {
-          const response = { error: null };
-          response.eq = () => response;
-          return response;
-        },
-        delete: () => {
-          const response = { error: null };
-          response.eq = () => response;
-          return response;
-        },
-        upsert: () => ({ error: null }),
-      }),
-      auth: {
-        signUp: () => ({ data: { user: null }, error: null }),
-        signInWithPassword: () => ({ data: { user: null, session: null }, error: null }),
-        signOut: () => ({ error: null }),
-        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } }, error: null }),
-        getUser: () => ({ data: { user: null }, error: null }),
-        getSession: () => ({ data: { session: null }, error: null }),
-      },
-      storage: {
-        from: () => ({
-          upload: () => ({ data: {}, error: null }),
-          getPublicUrl: () => ({ data: { publicUrl: '' } }),
-        }),
-      },
-      channel: (name) => ({
-        on: (type, config, callback) => {
-          // Mock return for channel subscription
-          return {
-            subscribe: () => ({ unsubscribe: () => {} })
-          };
-        },
-        subscribe: () => ({ unsubscribe: () => {} }),
-      }),
-    };
-  }
-  
-  try {
-    return createClient(supabaseUrl, supabaseAnonKey);
-  } catch (error) {
-    console.error('Error creating Supabase client:', error);
-    throw error;
-  }
-};
-
-export const supabase = createSupabaseClient();
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Database schema names
 export const TABLES = {
@@ -92,8 +31,42 @@ export const songService = {
       return [];
     }
     
-    // Sort the data in JavaScript instead of using .order()
+    // Sort the data in JavaScript 
     return (data as Song[]).sort((a, b) => {
+      const dateA = a.addedAt || 0;
+      const dateB = b.addedAt || 0;
+      return dateB - dateA; // Sort descending (newest first)
+    });
+  },
+  
+  async getSharedSongs(roomId: string) {
+    const { data, error } = await supabase
+      .from(TABLES.SYNC_ROOMS)
+      .select(`
+        owner_id,
+        partner_id
+      `)
+      .eq('id', roomId)
+      .single();
+    
+    if (error || !data) {
+      console.error('Error fetching room details:', error);
+      return [];
+    }
+    
+    // Get songs from both users in the room
+    const { data: songs, error: songsError } = await supabase
+      .from(TABLES.SONGS)
+      .select('*')
+      .or(`user_id.eq.${data.owner_id},user_id.eq.${data.partner_id}`);
+    
+    if (songsError) {
+      console.error('Error fetching shared songs:', songsError);
+      return [];
+    }
+    
+    // Sort the data
+    return (songs as Song[]).sort((a, b) => {
       const dateA = a.addedAt || 0;
       const dateB = b.addedAt || 0;
       return dateB - dateA; // Sort descending (newest first)
@@ -173,12 +146,14 @@ export const chatService = {
   },
   
   async sendMessage(message: ChatMessage) {
+    const { data: userData } = await supabase.auth.getUser();
+    
     const { error } = await supabase
       .from(TABLES.CHAT_MESSAGES)
       .insert([{
         room_id: message.roomId,
         text: message.text,
-        sender_id: supabase.auth.getUser()?.data?.user?.id,
+        sender_id: userData?.user?.id,
         timestamp: new Date().toISOString(),
         is_read: false
       }]);
@@ -216,10 +191,11 @@ export const chatService = {
       },
       (payload) => {
         const rawMsg = payload.new;
+        const { data: userData } = supabase.auth.getUser();
         const formattedMessage: ChatMessage = {
           id: rawMsg.id,
           text: rawMsg.text,
-          sender: rawMsg.sender_id === supabase.auth.getUser()?.data?.user?.id ? 'me' : 'partner',
+          sender: rawMsg.sender_id === userData?.user?.id ? 'me' : 'partner',
           timestamp: new Date(rawMsg.timestamp).getTime(),
           roomId: rawMsg.room_id
         };
@@ -233,20 +209,61 @@ export const chatService = {
 
 // Connection-related functions
 export const connectionService = {
+  async checkUserExists(email: string) {
+    try {
+      // Check if the user exists with this email
+      const { data, error } = await supabase
+        .from(TABLES.PROFILES)
+        .select('id')
+        .eq('email', email);
+      
+      if (error) {
+        console.error('Error checking user:', error);
+        return false;
+      }
+      
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Error in checkUserExists:', error);
+      return false;
+    }
+  },
+  
   async createConnection(userId: string, partnerEmail: string) {
     try {
       // First check if the partner email exists in the system
       const { data: userCheck, error: userError } = await supabase
         .from(TABLES.PROFILES)
-        .select('id')
+        .select('id, email')
         .eq('email', partnerEmail);
       
-      if (userError || !userCheck || userCheck.length === 0) {
-        console.error('User not found:', userError || 'No user with that email');
-        throw new Error('User not found with that email');
+      if (userError) {
+        console.error('Error checking user:', userError);
+        throw new Error('Failed to check if user exists');
+      }
+      
+      if (!userCheck || userCheck.length === 0) {
+        console.error('User not found with email:', partnerEmail);
+        throw new Error(`User not found with email: ${partnerEmail}`);
       }
       
       const partnerId = userCheck[0].id;
+      
+      // Check if connection already exists
+      const { data: existingRoom, error: roomCheckError } = await supabase
+        .from(TABLES.SYNC_ROOMS)
+        .select('id')
+        .or(`and(owner_id.eq.${userId},partner_id.eq.${partnerId}),and(owner_id.eq.${partnerId},partner_id.eq.${userId})`)
+        .eq('active', true);
+      
+      if (roomCheckError) {
+        console.error('Error checking existing room:', roomCheckError);
+        throw new Error('Failed to check if connection already exists');
+      }
+      
+      if (existingRoom && existingRoom.length > 0) {
+        return existingRoom[0]; // Return existing connection
+      }
       
       // Create a sync room for the connection
       const { data: room, error: roomError } = await supabase
@@ -284,14 +301,18 @@ export const connectionService = {
           active, 
           owner_id, 
           partner_id, 
-          profiles!owner_id(username, display_name),
-          profiles!partner_id(username, display_name)
+          profiles!owner_id(email, display_name),
+          profiles!partner_id(email, display_name)
         `)
         .or(`owner_id.eq.${userId},partner_id.eq.${userId}`)
         .eq('active', true);
       
       if (error) {
         console.error('Error fetching connections:', error);
+        return [];
+      }
+      
+      if (!data || data.length === 0) {
         return [];
       }
       
@@ -304,7 +325,7 @@ export const connectionService = {
         return {
           id: conn.id,
           partnerId,
-          partnerName: partnerProfile?.display_name || partnerProfile?.username || 'Unknown User',
+          partnerName: partnerProfile?.display_name || partnerProfile?.email || 'Unknown User',
           createdAt: conn.created_at,
           lastActivity: conn.last_activity,
           active: conn.active
@@ -370,8 +391,8 @@ export const syncService = {
         .upsert([{
           room_id: roomId,
           is_playing: playbackState.isPlaying,
-          current_position: playbackState.currentTime, // Renamed in DB schema
-          duration_value: playbackState.duration, // Renamed in DB schema
+          current_position: playbackState.currentTime,
+          duration_value: playbackState.duration,
           volume: playbackState.volume,
           is_muted: playbackState.isMuted,
           is_shuffled: playbackState.isShuffled,
@@ -427,8 +448,8 @@ export const syncService = {
           // Map from DB schema to our app's expected format
           const playbackState: PlaybackState = {
             isPlaying: rawState.is_playing,
-            currentTime: rawState.current_position, // Renamed in DB schema
-            duration: rawState.duration_value, // Renamed in DB schema
+            currentTime: rawState.current_position,
+            duration: rawState.duration_value,
             volume: rawState.volume,
             isMuted: rawState.is_muted,
             isShuffled: rawState.is_shuffled,
@@ -501,6 +522,7 @@ export const authService = {
             id: data.user.id,
             username: email.split('@')[0], // Default username from email
             display_name: email.split('@')[0], // Default display name
+            email: email, // Store email in profiles for easier lookup
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }]);

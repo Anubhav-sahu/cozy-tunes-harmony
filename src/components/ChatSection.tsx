@@ -1,128 +1,143 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Trash2, Send } from 'lucide-react';
+import { MessageSquare, Send, X, Trash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatMessage } from '@/lib/types';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
+import ChatBubble from './ChatBubble';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatSectionProps {
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
   onClearChat: () => void;
+  onToggle: () => void;
+  unreadCount: number;
 }
 
 const ChatSection: React.FC<ChatSectionProps> = ({
   messages,
   onSendMessage,
-  onClearChat
+  onClearChat,
+  onToggle,
+  unreadCount = 0
 }) => {
-  const [message, setMessage] = useState('');
+  const [messageText, setMessageText] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
   
-  // Scroll to bottom when messages change
+  // Scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (isOpen && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [messages.length, isOpen]);
+  
+  // Focus input when chat is opened
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isOpen]);
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim()) {
-      onSendMessage(message);
-      setMessage('');
+    if (messageText.trim()) {
+      onSendMessage(messageText);
+      setMessageText('');
     }
   };
   
-  // Format timestamp
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const handleToggle = () => {
+    setIsOpen(prev => !prev);
+    onToggle();
   };
   
   return (
-    <div className="glass-panel h-full flex flex-col">
-      <Tabs defaultValue="messages" className="w-full h-full flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-          <TabsList className="grid grid-cols-1 bg-white/10">
-            <TabsTrigger value="messages" className="text-white">
-              <MessageCircle size={18} className="mr-2" />
-              Chat
-            </TabsTrigger>
-          </TabsList>
+    <div className={cn(
+      "glass-panel transition-all duration-300 overflow-hidden",
+      isOpen ? "h-[400px] flex flex-col" : "h-auto"
+    )}>
+      <div 
+        className="flex items-center justify-between p-4 cursor-pointer"
+        onClick={handleToggle}
+      >
+        <div className="flex items-center">
+          <MessageSquare size={20} className="text-white/80 mr-2" />
+          <h3 className="text-white font-medium">Chat</h3>
           
-          <button
-            className="text-white/70 hover:text-white transition-colors"
-            onClick={onClearChat}
-            title="Clear chat"
-          >
-            <Trash2 size={16} />
-          </button>
+          {!isOpen && unreadCount > 0 && (
+            <div className="ml-2 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              {unreadCount}
+            </div>
+          )}
         </div>
         
-        <TabsContent value="messages" className="flex-1 flex flex-col px-0 mt-0 h-full">
-          {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-3">
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-white/50 text-center">
-                <MessageCircle size={30} className="mb-2" />
-                <p>No messages yet</p>
-                <p className="text-xs">Send a message to your partner</p>
-              </div>
-            ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={cn(
-                    "max-w-[80%] mb-2 p-2 rounded-lg",
-                    msg.sender === 'me'
-                      ? "bg-blue-500/80 ml-auto rounded-br-none"
-                      : "bg-white/10 rounded-bl-none"
-                  )}
-                >
-                  <p className="text-white text-sm">{msg.text}</p>
-                  <p className="text-right text-white/60 text-xs mt-1">
-                    {formatTime(msg.timestamp)}
-                  </p>
+        {isOpen && (
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Clear chat"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClearChat();
+            }}
+            className="text-white/60 hover:text-white/90"
+          >
+            <Trash size={16} />
+          </Button>
+        )}
+      </div>
+      
+      {isOpen && (
+        <>
+          <div className="flex-1 p-4 animate-fade-in overflow-hidden">
+            <ScrollArea className="h-[270px] pr-4">
+              {messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-white/50 text-center">
+                  <div>
+                    <MessageSquare size={40} className="mx-auto mb-2 opacity-50" />
+                    <p>No messages yet</p>
+                    <p className="text-sm">Start chatting with your friend!</p>
+                  </div>
                 </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((message) => (
+                    <ChatBubble
+                      key={message.id}
+                      message={message.text}
+                      sender={message.sender}
+                      timestamp={message.timestamp}
+                    />
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </ScrollArea>
           </div>
           
-          {/* Chat Input */}
-          <form 
-            className="p-3 border-t border-white/10 flex items-center gap-2"
-            onSubmit={handleSubmit}
-          >
-            <Textarea
-              placeholder="Type a message..."
-              className="flex-1 bg-white/10 text-white border-none outline-none rounded-lg px-4 py-2 text-sm min-h-[40px] max-h-[120px]"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
-            />
-            <button
-              type="submit"
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
-                message.trim()
-                  ? "bg-blue-500 text-white hover:bg-blue-600"
-                  : "bg-white/10 text-white/50 cursor-not-allowed"
-              )}
-              disabled={!message.trim()}
-            >
-              <Send size={16} />
-            </button>
+          <form onSubmit={handleSubmit} className="p-4 border-t border-white/10">
+            <div className="flex gap-2">
+              <Input
+                ref={inputRef}
+                type="text"
+                placeholder="Type a message..."
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                className="bg-white/10 border-white/20"
+              />
+              <Button type="submit" size="icon" disabled={!messageText.trim()}>
+                <Send size={16} />
+              </Button>
+            </div>
           </form>
-        </TabsContent>
-      </Tabs>
+        </>
+      )}
     </div>
   );
 };

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { connectionService } from '@/lib/supabase';
-import { Users, UserPlus, RefreshCw } from 'lucide-react';
+import { Users, UserPlus, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -27,6 +27,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [error, setError] = useState('');
   const { user } = useAuth();
   
   // Load user's existing connections
@@ -35,8 +36,14 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
     
     try {
       setIsLoadingConnections(true);
+      setError('');
       const connectionsData = await connectionService.getActiveConnections(user.id);
       setConnections(connectionsData);
+      
+      if (connectionsData.length === 0) {
+        // No connections found, but this isn't an error
+        console.log("No active connections found for user");
+      }
     } catch (error) {
       console.error('Failed to load connections:', error);
       toast.error('Failed to load your connections');
@@ -55,8 +62,24 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
     e.preventDefault();
     if (!user || !partnerEmail.trim()) return;
     
+    // Check if user is attempting to connect with themselves
+    if (user.email && user.email.toLowerCase() === partnerEmail.toLowerCase()) {
+      setError("You cannot connect with yourself");
+      return;
+    }
+    
     try {
       setIsLoading(true);
+      setError('');
+      
+      // Validate that the email exists in the system
+      const emailExists = await connectionService.checkUserExists(partnerEmail);
+      
+      if (!emailExists) {
+        setError(`User with email ${partnerEmail} not found. Make sure they have registered.`);
+        return;
+      }
+      
       const connection = await connectionService.createConnection(user.id, partnerEmail);
       toast.success(`Connection with ${partnerEmail} created!`);
       setPartnerEmail('');
@@ -66,6 +89,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
       loadConnections();
     } catch (error: any) {
       console.error('Failed to create connection:', error);
+      setError(error.message || 'Failed to create connection');
       toast.error(error.message || 'Failed to create connection');
     } finally {
       setIsLoading(false);
@@ -121,12 +145,19 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
                     id="partnerEmail"
                     type="email"
                     value={partnerEmail}
-                    onChange={(e) => setPartnerEmail(e.target.value)}
+                    onChange={(e) => setPartnerEmail(e.target.value.trim())}
                     placeholder="Enter their email address"
                     className="bg-white/10 border-white/20"
                     required
                   />
                 </div>
+                
+                {error && (
+                  <div className="p-3 rounded bg-red-900/30 border border-red-500/30 flex items-start text-red-200 text-sm">
+                    <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
                 
                 <Button 
                   type="submit" 

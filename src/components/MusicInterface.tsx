@@ -178,7 +178,6 @@ const MusicInterface: React.FC<MusicInterfaceProps> = ({
               messages={messages}
               onSendMessage={sendMessage}
               onClearChat={clearChat}
-              isOpen={isChatOpen}
               onToggle={handleToggleChat}
               unreadCount={unreadCount}
             />

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useSongSync } from '@/hooks/useSongSync';
@@ -143,10 +142,8 @@ const Index = () => {
       const latestMessage = messages[messages.length - 1];
       if (latestMessage.sender === 'partner') {
         addNotification({
-          id: `msg_${Date.now()}`,
           type: 'info',
           message: `New message: ${latestMessage.text}`,
-          timestamp: Date.now(),
           autoHide: true
         });
       }

@@ -9,6 +9,7 @@ export interface Song {
   favorite: boolean;
   lyrics?: string;
   addedAt?: number; // Timestamp when the song was added
+  user_id?: string; // Add this to handle data from database
 }
 
 export interface ChatMessage {

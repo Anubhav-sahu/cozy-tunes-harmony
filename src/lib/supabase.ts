@@ -486,9 +486,10 @@ export const syncService = {
           filter: `room_id=eq.${roomId}`
         },
         (payload) => {
-          const rawState = payload.new || {};
+          // If payload.new is undefined or null, use empty object with proper type casting
+          const rawState = (payload.new || {}) as Record<string, any>;
           
-          // Map from DB schema to our app's expected format
+          // Map from DB schema to our app's expected format with proper null/undefined handling
           const playbackState: PlaybackState = {
             isPlaying: Boolean(rawState.is_playing),
             currentTime: Number(rawState.current_position || 0),
@@ -525,7 +526,8 @@ export const syncService = {
           filter: `room_id=eq.${roomId}`
         },
         (payload) => {
-          const rawState = payload.new || {};
+          // Cast to Record<string, any> to safely access properties
+          const rawState = (payload.new || {}) as Record<string, any>;
           
           // Map from DB schema to our app's expected format
           const viewState: ViewState = {

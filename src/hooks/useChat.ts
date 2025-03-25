@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { ChatMessage } from '@/lib/types';
 import { toast } from 'sonner';
@@ -22,14 +21,14 @@ export const useChat = (syncRoomId: string | null) => {
             const initialMessage: ChatMessage = {
               id: 'welcome',
               text: 'Chat is ready. Say hello to your partner!',
-              sender: 'system',
+              sender: 'system' as 'system',
               timestamp: Date.now(),
               roomId: syncRoomId
             };
             
             await chatService.sendMessage({
               ...initialMessage,
-              sender: 'me' // Convert to 'me' for database storage
+              sender: 'me'
             });
             
             setMessages([initialMessage]);
@@ -87,7 +86,7 @@ export const useChat = (syncRoomId: string | null) => {
       text,
       sender: 'me',
       timestamp: Date.now(),
-      roomId: syncRoomId // This is now a valid property
+      roomId: syncRoomId
     };
     
     // Optimistically update UI

@@ -15,7 +15,7 @@ export interface Song {
 export interface ChatMessage {
   id: string;
   text: string;
-  sender: 'me' | 'partner';
+  sender: 'me' | 'partner' | 'system';
   timestamp: number;
   roomId?: string;
 }

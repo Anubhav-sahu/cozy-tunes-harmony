@@ -385,9 +385,12 @@ export const connectionService = {
         const isOwner = conn.owner_id === userId;
         const partnerId = isOwner ? conn.partner_id : conn.owner_id;
         
-        // Safely access the profile data
-        const ownerProfileArray = conn.profiles?.sync_rooms_owner_id_fkey;
-        const partnerProfileArray = conn.profiles?.sync_rooms_partner_id_fkey;
+        // Type assertion for nested objects to avoid TypeScript errors
+        const profiles = conn.profiles as any;
+        
+        // Safely access the profile data with type assertions
+        const ownerProfileArray = profiles?.sync_rooms_owner_id_fkey || [];
+        const partnerProfileArray = profiles?.sync_rooms_partner_id_fkey || [];
         
         // Get the profile objects - these should be arrays with at least one item
         const ownerProfile = Array.isArray(ownerProfileArray) && ownerProfileArray.length > 0 

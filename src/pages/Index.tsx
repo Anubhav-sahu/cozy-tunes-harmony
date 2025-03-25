@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useSongSync } from '@/hooks/useSongSync';
@@ -5,7 +6,7 @@ import { useChat } from '@/hooks/useChat';
 import { useViewStateSync } from '@/hooks/useViewStateSync';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/contexts/AuthContext';
-import { ViewState, Notification } from '@/lib/types';
+import { ViewState, Notification, Song } from '@/lib/types';
 import { songService } from '@/lib/supabase';
 import { toast } from 'sonner';
 import AppLayout from '@/components/AppLayout';

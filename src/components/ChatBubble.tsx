@@ -7,7 +7,7 @@ import { ChatMessage } from '@/lib/types';
 // Individual message bubble props
 interface MessageBubbleProps {
   message: string;
-  sender: "me" | "partner";
+  sender: "me" | "partner" | "system";
   timestamp: number;
 }
 
@@ -35,7 +35,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, sender, timestam
         "max-w-[80%] mb-2 p-2 rounded-lg",
         sender === 'me'
           ? "bg-blue-500/80 ml-auto rounded-br-none"
-          : "bg-white/10 rounded-bl-none"
+          : sender === 'system'
+            ? "bg-gray-500/80 mx-auto rounded-b-none text-center"
+            : "bg-white/10 rounded-bl-none"
       )}
     >
       <p className="text-white text-sm">{message}</p>

@@ -5,7 +5,7 @@ import { useChat } from '@/hooks/useChat';
 import { useViewStateSync } from '@/hooks/useViewStateSync';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/contexts/AuthContext';
-import { ViewState, Notification, Song } from '@/lib/types';
+import { ViewState, Notification } from '@/lib/types';
 import { songService } from '@/lib/supabase';
 import { toast } from 'sonner';
 import AppLayout from '@/components/AppLayout';
@@ -167,7 +167,7 @@ const Index = () => {
     localStorage.setItem('background_darkness', value.toString());
   };
   
-  const handleSongUpload = async (song: Song) => {
+  const handleSongUpload = async (song: any) => {
     if (user) {
       try {
         const songWithUser = {
@@ -178,8 +178,8 @@ const Index = () => {
         
         addSong(songWithUser);
         
-        if (song.src.startsWith('blob:')) {
-          await songService.addSong(songWithUser as any);
+        if (!song.src.startsWith('blob:')) {
+          await songService.addSong(songWithUser);
         }
         
         if (syncState.isConnected && syncState.partnerOnline) {

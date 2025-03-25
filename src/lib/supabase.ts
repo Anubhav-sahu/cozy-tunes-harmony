@@ -1,4 +1,3 @@
-
 import { createClient, User, UserResponse } from '@supabase/supabase-js';
 import { Song, ChatMessage, ViewState, PlaybackState } from './types';
 
@@ -158,47 +157,61 @@ export const songService = {
 // Chat-related functions
 export const chatService = {
   async getMessages(roomId: string) {
-    const { data, error } = await supabase
-      .from(TABLES.CHAT_MESSAGES)
-      .select('*')
-      .eq('room_id', roomId)
-      .order('timestamp', { ascending: true });
-    
-    if (error) {
-      console.error('Error fetching messages:', error);
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.CHAT_MESSAGES)
+        .select('*')
+        .eq('room_id', roomId)
+        .order('timestamp', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching messages:', error);
+        return [];
+      }
+      
+      // Get current user for sender check
+      const currentUser = await supabase.auth.getUser();
+      const currentUserId = currentUser.data.user?.id;
+      
+      // Map database fields to our app's expected format
+      return (data || []).map(msg => ({
+        id: msg.id,
+        text: msg.text,
+        sender: msg.sender_id === currentUserId ? 'me' : 'partner',
+        timestamp: new Date(msg.timestamp).getTime(),
+        roomId: msg.room_id
+      })) as ChatMessage[];
+    } catch (error) {
+      console.error('Error in getMessages:', error);
       return [];
     }
-    
-    // Map database fields to our app's expected format
-    return (data || []).map(msg => ({
-      id: msg.id,
-      text: msg.text,
-      sender: msg.sender_id === (supabase.auth.getUser().then(res => res.data.user?.id)) ? 'me' : 'partner',
-      timestamp: new Date(msg.timestamp).getTime(),
-      roomId: msg.room_id
-    })) as ChatMessage[];
   },
   
   async sendMessage(message: ChatMessage) {
-    const userData = await supabase.auth.getUser();
-    const userId = userData.data.user?.id;
-    
-    if (!userId) {
-      throw new Error('User not authenticated');
-    }
-    
-    const { error } = await supabase
-      .from(TABLES.CHAT_MESSAGES)
-      .insert([{
-        room_id: message.roomId,
-        text: message.text,
-        sender_id: userId,
-        timestamp: new Date().toISOString(),
-        is_read: false
-      }]);
-    
-    if (error) {
-      console.error('Error sending message:', error);
+    try {
+      const userData = await supabase.auth.getUser();
+      const userId = userData.data.user?.id;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      const { error } = await supabase
+        .from(TABLES.CHAT_MESSAGES)
+        .insert([{
+          room_id: message.roomId,
+          text: message.text,
+          sender_id: userId,
+          timestamp: new Date().toISOString(),
+          is_read: false
+        }]);
+      
+      if (error) {
+        console.error('Error sending message:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in sendMessage:', error);
       throw error;
     }
   },
@@ -250,45 +263,55 @@ export const chatService = {
 export const connectionService = {
   async checkUserExists(email: string) {
     try {
+      // Normalize email and ensure it's trimmed and lowercased
+      const normalizedEmail = email.toLowerCase().trim();
+      
       // Check if the user exists with this email
       const { data, error } = await supabase
         .from(TABLES.PROFILES)
         .select('id')
-        .eq('email', email.toLowerCase().trim());
+        .eq('email', normalizedEmail);
       
       if (error) {
         console.error('Error checking user:', error);
-        return false;
+        throw new Error(`Failed to check if user exists: ${error.message}`);
       }
       
       return data && data.length > 0;
     } catch (error) {
       console.error('Error in checkUserExists:', error);
-      return false;
+      throw error; // Propagate the error to handle it in the UI
     }
   },
   
   async createConnection(userId: string, partnerEmail: string) {
     try {
-      partnerEmail = partnerEmail.toLowerCase().trim();
+      // Normalize email
+      const normalizedEmail = partnerEmail.toLowerCase().trim();
       
       // First check if the partner email exists in the system
       const { data: userCheck, error: userError } = await supabase
         .from(TABLES.PROFILES)
-        .select('id, email')
-        .eq('email', partnerEmail);
+        .select('id, email, display_name')
+        .eq('email', normalizedEmail);
       
       if (userError) {
         console.error('Error checking user:', userError);
-        throw new Error('Failed to check if user exists');
+        throw new Error(`Failed to check if user exists: ${userError.message}`);
       }
       
       if (!userCheck || userCheck.length === 0) {
-        console.error('User not found with email:', partnerEmail);
-        throw new Error(`User not found with email: ${partnerEmail}`);
+        console.error('User not found with email:', normalizedEmail);
+        throw new Error(`User not found with email: ${normalizedEmail}`);
       }
       
       const partnerId = userCheck[0].id;
+      const partnerName = userCheck[0].display_name || userCheck[0].email;
+      
+      // Make sure user is not connecting with themselves
+      if (userId === partnerId) {
+        throw new Error("You cannot connect with yourself");
+      }
       
       // Check if connection already exists
       const { data: existingRoom, error: roomCheckError } = await supabase
@@ -342,8 +365,8 @@ export const connectionService = {
           active, 
           owner_id, 
           partner_id, 
-          profiles!sync_rooms_owner_id_fkey(email, display_name),
-          profiles!sync_rooms_partner_id_fkey(email, display_name)
+          profiles!sync_rooms_owner_id_fkey(id, email, display_name),
+          profiles!sync_rooms_partner_id_fkey(id, email, display_name)
         `)
         .or(`owner_id.eq.${userId},partner_id.eq.${userId}`)
         .eq('active', true);
@@ -362,8 +385,18 @@ export const connectionService = {
         const isOwner = conn.owner_id === userId;
         const partnerId = isOwner ? conn.partner_id : conn.owner_id;
         
-        const ownerProfile = (conn.profiles as any)['sync_rooms_owner_id_fkey'] as Record<string, any>;
-        const partnerProfile = (conn.profiles as any)['sync_rooms_partner_id_fkey'] as Record<string, any>;
+        // Safely access the profile data
+        const ownerProfileArray = conn.profiles?.sync_rooms_owner_id_fkey;
+        const partnerProfileArray = conn.profiles?.sync_rooms_partner_id_fkey;
+        
+        // Get the profile objects - these should be arrays with at least one item
+        const ownerProfile = Array.isArray(ownerProfileArray) && ownerProfileArray.length > 0 
+          ? ownerProfileArray[0] 
+          : { display_name: 'Unknown', email: 'unknown@example.com' };
+          
+        const partnerProfile = Array.isArray(partnerProfileArray) && partnerProfileArray.length > 0 
+          ? partnerProfileArray[0] 
+          : { display_name: 'Unknown', email: 'unknown@example.com' };
         
         const partnerInfo = isOwner ? partnerProfile : ownerProfile;
         
@@ -489,8 +522,14 @@ export const syncService = {
           filter: `room_id=eq.${roomId}`
         },
         (payload) => {
-          // Type-safe handling for payload.new
-          const rawState = (payload.new || {}) as Record<string, any>;
+          // Make sure payload.new exists and is an object
+          if (!payload.new || typeof payload.new !== 'object') {
+            console.error("Invalid payload received in subscribeToPlaybackState:", payload);
+            return;
+          }
+          
+          // Type-safe handling for payload.new with default values for all properties
+          const rawState = payload.new as Record<string, any>;
           
           // Map from DB schema to app format with safe access
           const playbackState: PlaybackState = {
@@ -501,7 +540,9 @@ export const syncService = {
             isMuted: Boolean(rawState.is_muted ?? false),
             isShuffled: Boolean(rawState.is_shuffled ?? false),
             isRepeating: Boolean(rawState.is_repeating ?? false),
-            currentSongIndex: typeof rawState.current_song_index === 'number' ? rawState.current_song_index : undefined
+            currentSongIndex: typeof rawState.current_song_index === 'number' 
+              ? rawState.current_song_index 
+              : (rawState.current_song_index === null ? 0 : undefined)
           };
           
           callback(playbackState);
@@ -529,8 +570,14 @@ export const syncService = {
           filter: `room_id=eq.${roomId}`
         },
         (payload) => {
+          // Make sure payload.new exists and is an object
+          if (!payload.new || typeof payload.new !== 'object') {
+            console.error("Invalid payload received in subscribeToViewState:", payload);
+            return;
+          }
+          
           // Type-safe handling for payload.new
-          const rawState = (payload.new || {}) as Record<string, any>;
+          const rawState = payload.new as Record<string, any>;
           
           // Map from DB schema to app format with safe access
           const viewState: ViewState = {

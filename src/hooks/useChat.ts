@@ -22,15 +22,19 @@ export const useChat = (syncRoomId: string | null) => {
             const initialMessage: ChatMessage = {
               id: 'welcome',
               text: 'Chat is ready. Say hello to your partner!',
-              sender: 'partner',
+              sender: 'system',
               timestamp: Date.now(),
-              roomId: syncRoomId // This is now a valid property
+              roomId: syncRoomId
             };
             
-            await chatService.sendMessage(initialMessage);
+            await chatService.sendMessage({
+              ...initialMessage,
+              sender: 'me' // Convert to 'me' for database storage
+            });
             
             setMessages([initialMessage]);
           } else {
+            // Messages are already properly formatted by the chatService.getMessages
             setMessages(messagesData);
           }
         } catch (error) {

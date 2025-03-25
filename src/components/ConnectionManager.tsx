@@ -44,9 +44,9 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
         // No connections found, but this isn't an error
         console.log("No active connections found for user");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load connections:', error);
-      toast.error('Failed to load your connections');
+      toast.error('Failed to load your connections: ' + (error.message || 'Unknown error'));
     } finally {
       setIsLoadingConnections(false);
     }
@@ -72,7 +72,15 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({ onSelectConnectio
       setIsLoading(true);
       setError('');
       
-      // Create the connection directly - the service will handle validation
+      // First check if the user exists
+      const userExists = await connectionService.checkUserExists(partnerEmail);
+      
+      if (!userExists) {
+        setError(`User not found with email: ${partnerEmail}`);
+        return;
+      }
+      
+      // Create the connection
       const connection = await connectionService.createConnection(user.id, partnerEmail);
       toast.success(`Connection with ${partnerEmail} created!`);
       setPartnerEmail('');
